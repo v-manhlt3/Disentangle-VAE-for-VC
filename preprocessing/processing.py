@@ -6,10 +6,12 @@ import torch
 from tqdm import tqdm
 import librosa
 import librosa.display
-from hparams import hparams
+from preprocessing.hparams import hparams
+#from hparams import hparams
 from wavenet_vocoder import builder
 import matplotlib.pyplot as plt
-import utils as utils
+import preprocessing.utils as utils
+#import utils as utils
 
 torch.set_num_threads(4)
 use_cuda = torch.cuda.is_available()
@@ -102,13 +104,13 @@ def vocoder(mel_spectrogram_fp, ckpt_fp):
     mel_spectrogram = np.load(mel_spectrogram_fp)
     wav, sr = librosa.load(wav_fp)
     mel_spectrogram2 = utils.melspectrogram(wav)
-    #mel_spectrogram = np.transpose(mel_spectrogram,(1,0))
+
     print('mel_spectrogram file shape: ', mel_spectrogram.shape)
     print('mel_spectrogram from wav shape: ', mel_spectrogram2.shape)
 
     waveform = wavegen(vocoder_model, mel_spectrogram)
 
-    librosa.output.write_wav('/home/ubuntu/'+mel_name+'.wav_vocoder', waveform, sr=16000)
+    librosa.output.write_wav('/home/ubuntu/'+mel_name+'_vocoder.wav', waveform, sr=16000)
 
 def vocoder2(wav_fp, ckpt_fp):
     print('torch device: ',device)
@@ -125,14 +127,21 @@ def vocoder2(wav_fp, ckpt_fp):
 
     waveform = wavegen(vocoder_model, mel_spectrogram)
 
-    librosa.output.write_wav('/home/ubuntu/'+mel_name+'.wav_vocoder2', waveform, sr=16000)
+    librosa.output.write_wav('/home/ubuntu/'+mel_name+'.wav', waveform, sr=16000)
 
 
+def simple_inverse(mel_spectrogram_fp):
+    mel_spectrogram = np.load(mel_spectrogram_fp)
+    filter_mel = librosa.filters.mel(sr=16000, n_fft=1024, n_mels=80, fmin=90)
 
+    s_inv = librosa.feature.inverse.mel_to_stft(filter_mel)
+    waveform = librosa.griffinlim(s_inv, n_iter=32, hop_length=256)
+
+    librosa.output.write_wav('/home/ubuntu/'+'simple.wav', waveform, sr=16000)
 
 if __name__=='__main__':
     fp = '/home/ubuntu/VCTK-Corpus/encoder'
-    mel_fp = '/home/ubuntu/VCTK-Corpus/new_encoder3/VCTK-Corpus_wav16_p244/p244_424.npy'
+    mel_fp = '/home/ubuntu/VCTK-Corpus/new_encoder/VCTK-Corpus_wav16_p376/p376_295.npy'
     wav_fp = '/home/ubuntu/VCTK-Corpus/wav16/p244/p244_424.wav'
     mel = np.load(mel_fp)
 
@@ -142,6 +151,7 @@ if __name__=='__main__':
     plt.colorbar(format='%f')
     plt.savefig('/home/ubuntu/test_normalize_vctk.png')
 
+    #simple_inverse(mel_fp)
     vocoder(mel_fp, '/home/ubuntu/checkpoint_step001000000_ema.pth')
-    #vocoder2(wav_fp, '/home/ubuntu/checkpoint_step001000000_ema.pth')
+    # vocoder2(wav_fp, '/home/ubuntu/checkpoint_step001000000_ema.pth')
     # del_valid_data(fp)

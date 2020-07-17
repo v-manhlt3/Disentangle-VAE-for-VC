@@ -1,0 +1,1 @@
+python jointly_train_emb_autoencoder.py --data_path=/home/ubuntu/VCTK-Corpus/new_encoder/ --emb_model_path=/home/ubuntu/train_normalize_data.pt --save_path=/home/ubuntu/autovc_vctk_final_obama/ --save_iter=10000  --lr=1e-3
