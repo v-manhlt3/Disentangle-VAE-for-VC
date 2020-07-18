@@ -29,7 +29,14 @@ def sync(device: torch.device):
 # def get_losses():
 #         loss = 0
 #         return loss
-
+def shuffle_utt(spk_embs, num_speakers, num_utterances):
+    result = []
+    for i in range(num_speakers):
+        speaker_emb = spk_embs[i*num_utterances:i*num_utterances+ num_utterances,:]
+        speaker_emb = speaker_emb[torch.randperm(num_utterances)]
+        result.append(speaker_emb)
+    result = torch.stack(result)
+    return result
 
 def trainning_procedure(config):
     writer = SummaryWriter(os.path.join(config['save_path'], 'logs'))
@@ -44,11 +51,12 @@ def trainning_procedure(config):
     
     speaker_emb = SpeakerEncoder(device, device)
     emb_ckt = torch.load(config['emb_model_path'])
-    # speaker_emb.load_state_dict(emb_ckt['model_state'])
+    speaker_emb.load_state_dict(emb_ckt['model_state'])
     generator = Generator(32, 256, 512, 32).to(device)
     model_params = list(generator.parameters()) + list(speaker_emb.parameters())
     optimizer = torch.optim.Adam(
-        model_params,
+        # model_params,
+        generator.parameters(),
         lr=config['lr'],
         betas=(0.99, 0.999))
     speaker_emb_optimizer = torch.optim.Adam(
@@ -74,10 +82,15 @@ def trainning_procedure(config):
             data = torch.transpose(data, -1, -2)
             sync(device)
             spk_embs = speaker_emb(data).to(device)
-            emb_loss = spk_embs.view((config['num_speakers'], config['num_utterances'], -1)).to(device)
-            loss_emb,_ = speaker_emb.loss(emb_loss)
+            # print('spk_emb shape:', spk_embs.shape)
+            # emb_loss = spk_embs.view((config['num_speakers'], config['num_utterances'], -1)).to(device)
+            # loss_emb,_ = speaker_emb.loss(emb_loss)
 
-
+            ################### Shuffle utterances belong to a speaker #####################
+            shuffle_spk_embs = shuffle_utt(spk_embs, config['num_speakers'], config['num_utterances'])
+            shuffle_spk_embs = shuffle_spk_embs.view(-1, 256)
+            ##############################################################################
+            # print('shuffle_spk_embs shape: ', shuffle_spk_embs.shape)
             sync(device)
 
             mel_outputs, mel_outputs_posnet, encoder_out = generator(
@@ -94,23 +107,23 @@ def trainning_procedure(config):
             loss_recon_zero = torch.nn.functional.mse_loss(data, mel_outputs)
             optimizer.zero_grad()
             speaker_emb_optimizer.zero_grad()
-            loss = loss_content + loss_recon + loss_recon_zero + loss_emb
+            loss = loss_content + loss_recon + loss_recon_zero 
             sync(device)
 
 
-            speaker_emb.similarity_weight.retain_grad()
-            speaker_emb.similarity_bias.retain_grad()
-            speaker_emb.zero_grad()
+            # speaker_emb.similarity_weight.retain_grad()
+            # speaker_emb.similarity_bias.retain_grad()
+            # speaker_emb.zero_grad()
             # loss_emb.backward()
             loss.backward()
             optimizer.step()
-            speaker_emb_optimizer.step()
+            # speaker_emb_optimizer.step()
             ########## write log #############################3
             if step % 1000:
                 writer.add_scalar('Loss\Reconstruction Loss', loss_recon, step)
                 writer.add_scalar('Loss\Reconstruction Loss Zero', loss_recon_zero, step)
                 writer.add_scalar('Loss\Content Loss', loss_content, step)
-                writer.add_scalar('Loss\Speaker Embedding Loss', loss_emb, step)
+                # writer.add_scalar('Loss\Speaker Embedding Loss', loss_emb, step)
             ##################################################
             
             print('iteration:{}-----Loss: {}'.format(step, loss.item()))
@@ -128,7 +141,7 @@ def trainning_procedure(config):
                 }, 
                 os.path.join(config['save_path'], 'save_ckp','model_ckp_'+str(step)+'.pt'))
                 convert_voice(loader, config, step)
-            if step == 200000:
+            if step == 500000:
                 steplr.step()
 
 
@@ -141,11 +154,9 @@ def convert_voice(loader, config, step):
 ################ load data and init model #######################################
     src_mel = data[rnd_choice[0]]
     src_mel = torch.transpose(src_mel, -1, -2)
-    # src_mel = torch.from_numpy(src_mel).to(device)
     trg_mel = data[rnd_choice[1]]
     trg_mel = torch.transpose(trg_mel, -1, -2)
-    # trg_utt = torch.from_numpy(trg_utt).to(device)
-
+ 
     speaker_emb = SpeakerEncoder(device, device).to(device)
     generator = Generator(32, 256, 512, 32).to(device)
     generator_ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_'+str(step)+'.pt'))

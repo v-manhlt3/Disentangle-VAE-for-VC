@@ -156,12 +156,12 @@ class SpeechDataset3(Dataset):
                     mel_spec = np.load(utterance)
             rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
             mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
-            print('mel shape: ', len(mel_spec))
+            # print('mel shape: ', len(mel_spec))
             data.append(mel_spec)
             utterances.append(utterance)
             speaker_ids.append(speaker_id)
         data = torch.tensor(data)
-        print('data shape: ', data.shape) 
+        # print('data shape: ', data.shape) 
         return data, utterances, speaker_ids
     def __len__(self):
         return len(self.speaker_ids)

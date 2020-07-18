@@ -301,8 +301,8 @@ if __name__ == '__main__':
         load_ckp=args.load_ckp,
         save_path=args.save_path,
     )
-    #trainning_procedure(config)
-    convert_voice_wav(config)
+    trainning_procedure(config)
+    #convert_voice_wav(config)
     # clean_data_root = '/home/ubuntu/LibriSpeech/mel_spectrogram/'
     # filename2 = '/home/ubuntu/testtt.png'
     # clean_data_root = Path(clean_data_root)
