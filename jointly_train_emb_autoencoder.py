@@ -53,8 +53,8 @@ def trainning_procedure(config):
     speaker_emb = SpeakerEncoder(device, device)
     emb_ckt = torch.load(config['emb_model_path'])
     speaker_emb.load_state_dict(emb_ckt['model_state'])
-    # generator = Generator(32, 256, 512, 32).to(device)
-    generator = Generator(64, 256, 512,16).to(device)
+    generator = Generator(32, 256, 512, 32).to(device)
+    #generator = Generator(64, 256, 512,16).to(device)
     model_params = list(generator.parameters()) + list(speaker_emb.parameters())
     optimizer = torch.optim.Adam(
         # model_params,
@@ -68,8 +68,8 @@ def trainning_procedure(config):
     )
     init_step = 0
     if config['load_ckp']:
-        #ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_100000.pt'))
-        ckp = torch.load('/home/ubuntu/autovc_vctk_final2/save_ckp/model_ckp_790000.pt')
+        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_800000.pt'))
+        #ckp = torch.load('/home/ubuntu/autovc_vctk_final2/save_ckp/model_ckp_790000.pt')
         optimizer.load_state_dict(ckp['optimizer'])
         init_step = ckp['iteration']
         generator.load_state_dict(ckp['model_state'])
@@ -164,8 +164,8 @@ def convert_voice(loader, config, step):
     trg_mel = torch.transpose(trg_mel, -1, -2)
  
     speaker_emb = SpeakerEncoder(device, device).to(device)
-    #generator = Generator(32, 256, 512, 32).to(device)
-    generator = Generator(64, 256, 512,16).to(device)
+    generator = Generator(32, 256, 512, 32).to(device)
+    #generator = Generator(64, 256, 512,16).to(device)
     generator_ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_'+str(step)+'.pt'))
     emb_ckp = torch.load(config['emb_model_path'])
 
@@ -338,6 +338,6 @@ if __name__ == '__main__':
         load_ckp=args.load_ckp,
         save_path=args.save_path,
     )
-    #trainning_procedure(config)
-    convert_voice_wav(config)
+    trainning_procedure(config)
+    #convert_voice_wav(config)
     

@@ -176,7 +176,7 @@ class SpeechDataset3(Dataset):
             utterance = self.utterance_ids[speaker_id][rd_uttrance]
             mel_spec = np.load(utterance)
             # transpose for new new_encoder2 dataset
-            mel_spec = np.transpose(mel_spec, (1, 0))
+            #mel_spec = np.transpose(mel_spec, (1, 0))
             #print('mel spectrogram shape: ', mel_spec.shape)
             if mel_spec.shape[1] <= self.samples_length:
                 while mel_spec.shape[1] < self.samples_length:
@@ -187,10 +187,10 @@ class SpeechDataset3(Dataset):
                     # fn = os.path.join(folder_path, utterance)
                     # file = open(fn,'rb')
                     mel_spec = np.load(utterance)
-            print('mel shape:  ',mel_spec.shape[1])
-            i#print(': ', (mel_spec.shape[1] - self.samples_length))
+            #print('mel shape:  ',mel_spec.shape[1])
+            #print(': ', (mel_spec.shape[1] - self.samples_length))
             rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
-            print('rd begin: ', rd_begin)
+            #print('rd begin: ', rd_begin)
             # print()
             mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
             #print('mel spectrogram shape: ', mel_spec.shape)

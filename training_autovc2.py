@@ -110,7 +110,7 @@ def trainning_procedure(config):
                 #}, 
                 #os.path.join(config['save_path'], 'save_ckp','model_ckp_'+str(step)+'.pt'))
                 #convert_voice(loader, config, step)
-            if step == 500000:
+            if step == init_step+150000:
                 steplr.step()
 
 
