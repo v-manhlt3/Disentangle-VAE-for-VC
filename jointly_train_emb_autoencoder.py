@@ -15,6 +15,7 @@ from pathlib import Path
 import math
 import numpy as np
 from preprocessing.processing import build_model, wavegen
+import macpath
 from tensorboardX import SummaryWriter
 
 device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
@@ -52,7 +53,8 @@ def trainning_procedure(config):
     speaker_emb = SpeakerEncoder(device, device)
     emb_ckt = torch.load(config['emb_model_path'])
     speaker_emb.load_state_dict(emb_ckt['model_state'])
-    generator = Generator(32, 256, 512, 32).to(device)
+    # generator = Generator(32, 256, 512, 32).to(device)
+    generator = Generator(64, 256, 512,16).to(device)
     model_params = list(generator.parameters()) + list(speaker_emb.parameters())
     optimizer = torch.optim.Adam(
         # model_params,
@@ -66,7 +68,8 @@ def trainning_procedure(config):
     )
     init_step = 0
     if config['load_ckp']:
-        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_10000.pt'))
+        #ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_100000.pt'))
+        ckp = torch.load('/home/ubuntu/autovc_vctk_final2/save_ckp/model_ckp_790000.pt')
         optimizer.load_state_dict(ckp['optimizer'])
         init_step = ckp['iteration']
         generator.load_state_dict(ckp['model_state'])
@@ -115,6 +118,9 @@ def trainning_procedure(config):
             # speaker_emb.similarity_bias.retain_grad()
             # speaker_emb.zero_grad()
             # loss_emb.backward()
+            if math.isnan(loss.item()):
+                print('loss is nan')
+                continue
             loss.backward()
             optimizer.step()
             # speaker_emb_optimizer.step()
@@ -141,7 +147,7 @@ def trainning_procedure(config):
                 }, 
                 os.path.join(config['save_path'], 'save_ckp','model_ckp_'+str(step)+'.pt'))
                 convert_voice(loader, config, step)
-            if step == 500000:
+            if step == init_step+100000:
                 steplr.step()
 
 
@@ -158,7 +164,8 @@ def convert_voice(loader, config, step):
     trg_mel = torch.transpose(trg_mel, -1, -2)
  
     speaker_emb = SpeakerEncoder(device, device).to(device)
-    generator = Generator(32, 256, 512, 32).to(device)
+    #generator = Generator(32, 256, 512, 32).to(device)
+    generator = Generator(64, 256, 512,16).to(device)
     generator_ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_'+str(step)+'.pt'))
     emb_ckp = torch.load(config['emb_model_path'])
 
@@ -191,13 +198,10 @@ def convert_voice(loader, config, step):
         plt.savefig(plt_path + '/origin_' + str(step)+'_utterance_'+str(i)+'.png')
 
 def convert_voice_wav(config):
-        # dataset_path = os.path.join(config['data_path'])
-        # dataset = SpeechDataset3(dataset_path, samples_length=192, num_utterances=50)
-        # loader = DataLoader(dataset, num_workers=8, batch_size=4,
-        #                     pin_memory=True, shuffle=True, drop_last=True)
 
-        src_fp = '/home/ubuntu/VCTK-Corpus/new_encoder3/VCTK-Corpus_wav16_chunking_anh_hung/trim_16k_anh_hung_cut.npy_9.npy'
-        trg_fp = '/home/ubuntu/VCTK-Corpus/new_encoder3/VCTK-Corpus_wav16_chunking_anh_vuong/trim_16k_anh_V_cut7.npy_9.npy'
+        trg_fp = '/home/ubuntu/VCTK-Corpus/new_encoder2/VCTK-Corpus_wav16_p227/p227_006.npy'
+        #src_fp = '/home/ubuntu/VCTK-Corpus/new_encoder2/VCTK-Corpus_wav16_p227/p227_002.npy'
+        src_fp = '/vinai/manhlt/download/vietnam_intro.npy'
         src_mel = np.load(src_fp, allow_pickle=True)
         trg_mel = np.load(trg_fp, allow_pickle=True)
 
@@ -207,11 +211,13 @@ def convert_voice_wav(config):
         plt_path = os.path.join(config['save_path'], 'convert_voice', 'plot')
         if not os.path.exists(plt_path):
             os.mkdir(plt_path)
-
+        #src_mel = np.pad(src_mel, (0, 6), "constant", 0)
         # batch = next(iter(loader))
         # data = batch[0].type(torch.FloatTensor).to(device)
         # rnd_choice = np.random.choice(4,2,replace=False)
-        src_mel = torch.from_numpy(src_mel).unsqueeze(0).type(torch.FloatTensor).to(device)
+        src_mel = torch.from_numpy(src_mel)
+        src_mel = torch.nn.functional.pad(src_mel, (0, 7), "constant", 0)
+        src_mel = src_mel.unsqueeze(0).type(torch.FloatTensor).to(device)
         trg_mel = torch.from_numpy(trg_mel).unsqueeze(0).type(torch.FloatTensor).to(device)
         
         '''
@@ -221,20 +227,22 @@ def convert_voice_wav(config):
         '''
         # src_mel = data[rnd_choice[0]]
         # src_speaker_id = batch[2][0][rnd_choice[0]]
-        src_mel = torch.transpose(src_mel, -1, -2)[:,0:192,:]
+        src_mel = torch.transpose(src_mel, -1, -2)[:,100:580,:]
+        #src_mel = torch.nn.functional.pad(src_mel, (0, 6), "constant", 0)
         # print('src mel shape: ', src_mel.shape)
         
 
         # trg_mel = data[rnd_choice[1]]
-        trg_mel = torch.transpose(trg_mel, -1, -2)[:,0:192,:]
+        trg_mel = torch.transpose(trg_mel, -1, -2)[:50,:50+192,:]
         # trg_speaker_id = batch[2][0][rnd_choice[1]]
 
         ###### Load model from ckp file ##################################
         speaker_emb = SpeakerEncoder(device, device).to(device)
         emb_ckt = torch.load(config['emb_model_path'])
         speaker_emb.load_state_dict(emb_ckt['model_state'])
-        generator = Generator(32, 256, 512, 32).to(device)
-        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_150000.pt'))
+        # generator = Generator(32, 256, 512, 32).to(device)
+        generator = Generator(64, 256, 512,16).to(device)
+        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_790000.pt'))
         init_step = ckp['iteration']
         generator.load_state_dict(ckp['model_state'])
 
@@ -242,11 +250,14 @@ def convert_voice_wav(config):
         ckpt = torch.load('/home/ubuntu/checkpoint_step001000000_ema.pth')
         vocoder_model.load_state_dict(ckpt['state_dict'])
         ##############################################################
-        src_identity = speaker_emb(src_mel).to(device)
+        print('src_mel shape: ', src_mel.shape)
+        src_identity = speaker_emb(src_mel[:,100:100+160,:]).to(device)
         trg_identity = speaker_emb(trg_mel).to(device)
 
         _, mel_outputs_postnet,_ = generator(src_mel, src_identity, trg_identity)
+        _, mel_outputs_postnet2,_ = generator(src_mel, src_identity, src_identity)
         mel_outputs_postnet = mel_outputs_postnet.squeeze(1)
+        mel_outputs_postnet2 = mel_outputs_postnet2.squeeze(1)
 
         for i in range(1):
             
@@ -257,15 +268,17 @@ def convert_voice_wav(config):
             # trg_utterance_id = batch[1][i][rnd_choice[1]].split('/')
             # trg_utterance_id = trg_utterance_id[-1].split('.')
             # trg_utterance_id = trg_utterance_id[0]
-            src_utterance_id = 'anh_hung'
-            trg_utterance_id = 'anh_vuong'
+            trg_utterance_id = 'p227_006'
+            src_utterance_id = 'habui'
 
             fn = src_utterance_id + '_to_' + trg_utterance_id
             print('converting '+src_utterance_id+  ' to ' + trg_utterance_id)
             origin_mel = src_mel[i]
             converted_mel = mel_outputs_postnet[i]
+            converted_mel2 = mel_outputs_postnet2[i]
 
             converted_mel = converted_mel.detach().cpu().numpy()
+            converted_mel2 = converted_mel2.detach().cpu().numpy()
             origin_mel = origin_mel.detach().cpu().numpy()
 
             plt.figure()
@@ -279,9 +292,22 @@ def convert_voice_wav(config):
             librosa.display.specshow(origin_mel, x_axis='time', y_axis='mel', sr=16000)
             plt.colorbar(format='%f')
             plt.savefig(plt_path + '/origin_' + fn +'.png')
+            
+            plt.figure()
+            plt.title('reconstructed mel same identity mel spectrogram')
+            librosa.display.specshow(converted_mel2, x_axis='time', y_axis='mel', sr=16000)
+            plt.colorbar(format='%f')
+            plt.savefig(plt_path + '/converted_origin_' + fn +'.png')
+
 
             waveform = wavegen(vocoder_model, converted_mel)
             librosa.output.write_wav(os.path.join(wav_path, fn + '.wav'), waveform, sr=16000)
+            
+            waveform2 = wavegen(vocoder_model, origin_mel)
+            librosa.output.write_wav(os.path.join(wav_path, src_utterance_id+ 'to'+src_utterance_id + '.wav'), waveform2, sr=16000)            
+
+            waveform3 = wavegen(vocoder_model, converted_mel2)
+            librosa.output.write_wav(os.path.join(wav_path, 'converted_identity_'+src_utterance_id+ 'to'+src_utterance_id + '.wav'), waveform2, sr=16000)
 
             
 
@@ -312,6 +338,6 @@ if __name__ == '__main__':
         load_ckp=args.load_ckp,
         save_path=args.save_path,
     )
-    trainning_procedure(config)
-    #convert_voice_wav(config)
+    #trainning_procedure(config)
+    convert_voice_wav(config)
     

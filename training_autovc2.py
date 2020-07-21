@@ -43,7 +43,8 @@ def trainning_procedure(config):
     speaker_emb = SpeakerEncoder(device, device)
     emb_ckt = torch.load(config['emb_model_path'])
     speaker_emb.load_state_dict(emb_ckt['model_state'])
-    generator = Generator(64, 256, 512, 16).to(device)
+    # generator = Generator(64, 256, 512, 16).to(device)
+    generator = Generator(32, 256, 512, 32).to(device)
     optimizer = torch.optim.Adam(
         generator.parameters(),
         lr=config['lr'],
@@ -65,7 +66,7 @@ def trainning_procedure(config):
             # print('speaker batch shape', speakers_batch[0].shape)
             data = speakers_batch[0].type(torch.FloatTensor).to(device)
             data = data.view(-1, data.shape[-2], data.shape[-1])
-            data = torch.transpose(data, -1, -2)
+            # data = torch.transpose(data, -1, -2)
             sync(device)
             spk_embs = speaker_emb(data).to(device)
             sync(device)
@@ -128,7 +129,8 @@ def convert_voice(loader, config, step):
     # trg_utt = torch.from_numpy(trg_utt).to(device)
 
     speaker_emb = SpeakerEncoder(device, device).to(device)
-    generator = Generator(64, 256, 512, 16).to(device)
+    # generator = Generator(64, 256, 512, 16).to(device)
+    generator = Generator(32, 256, 512, 32).to(device)
     generator_ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_'+str(step)+'.pt'))
     emb_ckp = torch.load(config['emb_model_path'])
 
@@ -205,8 +207,8 @@ def convert_voice_wav(config):
         speaker_emb = SpeakerEncoder(device, device).to(device)
         emb_ckt = torch.load(config['emb_model_path'])
         speaker_emb.load_state_dict(emb_ckt['model_state'])
-        #generator = Generator(32, 256, 512, 32).to(device)
-        generator = Generator(64, 256, 512,16).to(device)
+        generator = Generator(32, 256, 512, 32).to(device)
+        # generator = Generator(64, 256, 512,16).to(device)
         ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_450000.pt'))
         init_step = ckp['iteration']
         generator.load_state_dict(ckp['model_state'])
@@ -303,21 +305,4 @@ if __name__ == '__main__':
     )
     trainning_procedure(config)
     #convert_voice_wav(config)
-    # clean_data_root = '/home/ubuntu/LibriSpeech/mel_spectrogram/'
-    # filename2 = '/home/ubuntu/testtt.png'
-    # clean_data_root = Path(clean_data_root)
-    # dataset = SpeakerVerificationDataset(clean_data_root)
-    # loader = SpeakerVerificationDataLoader(
-    #         dataset,
-    #         64,
-    #         10,
-    #         num_workers=8,)
-
-    # speaker_batch = next(iter(loader))
-    # print(speaker_batch.data.shape)
-    # data = speaker_batch.data[0]
-    # plt.figure()
-    # plt.title('original mel spectrogram')
-    # librosa.display.specshow(data, x_axis='time', y_axis='mel', sr=16000)
-    # plt.colorbar(format='%f')
-    # plt.savefig(filename2)
+    

@@ -21,6 +21,34 @@ def timing(f):
         return result
     return wrap
 
+def get_col_txt(fp, col_number):
+
+    token = open(fp, 'r')
+    linestoken = token.readlines()
+    result = []
+
+    for line in linestoken:
+        result.append(line.split()[col_number]) 
+
+    del result[0]
+    return result
+
+def get_male_spk(fp):
+    rmv_idx = []
+    fp_spk_info = os.path.join(fp, 'speaker-info.txt')
+    file_header = ['ID', 'AGE', 'GENDER', 'ACCENTS', 'REGION']
+
+    spk_gender = get_col_txt(fp_spk_info, file_header.index('GENDER'))
+    spk_id = get_col_txt(fp_spk_info, file_header.index('ID'))
+    assert len(spk_gender) == len(spk_id)
+    for idx in range(len(spk_gender)):
+        if spk_gender[idx] == 'F':
+            rmv_idx.append(idx)
+            
+    spk_id = [spk for idx, spk in enumerate(spk_id) if idx not in rmv_idx]
+    return spk_id
+
+
 class SpeechDataset(Dataset):
     def __init__(self, file_path,sr=16000, samples_length=32768, num_utterances=10):
         self.file_path =file_path
@@ -120,17 +148,21 @@ class SpeechDataset2(Dataset):
 
 ########## Dataset for loading mel from numpy file #####################################
 class SpeechDataset3(Dataset):
-    def __init__(self, file_path,sr=16000, samples_length=64, num_utterances=10):
+    def __init__(self, file_path,sr=16000, samples_length=64, num_utterances=10, male_dataset=False):
         self.file_path =file_path
         self.sr = sr
         self.samples_length = samples_length
         self.num_utterances = num_utterances
-
-        self.speaker_ids = [f for f in os.listdir(self.file_path)]
+        self.speaker_info_fp = os.path.join(self.file_path, 'speaker-info.txt')
         self.utterance_ids = {}
+
+
+        if male_dataset:
+            self.speaker_ids = get_male_spk(self.file_path)
+        else:
+            self.speaker_ids = [f for f in os.listdir(self.file_path)]
+        
         for speaker in self.speaker_ids:
-            # self.utterance_ids[speaker] = [f for f in os.listdir(os.path.join(self.file_path, speaker)) \
-            #                               if os.path.isfile(os.path.join(self.file_path, speaker, f))]
             self.utterance_ids[speaker] = glob.glob(os.path.join(self.file_path, speaker, '*.npy'))
 
     def __getitem__(self, index):
@@ -142,10 +174,11 @@ class SpeechDataset3(Dataset):
             folder_path = os.path.join(self.file_path, speaker_id)
             rd_uttrance = np.random.choice(len(self.utterance_ids[speaker_id]), 1)[0]
             utterance = self.utterance_ids[speaker_id][rd_uttrance]
-            # fn = os.path.join(folder_path, utterance)
-            # file = open(fn,'rb')
             mel_spec = np.load(utterance)
-            if mel_spec.shape[1] < self.samples_length:
+            # transpose for new new_encoder2 dataset
+            mel_spec = np.transpose(mel_spec, (1, 0))
+            #print('mel spectrogram shape: ', mel_spec.shape)
+            if mel_spec.shape[1] <= self.samples_length:
                 while mel_spec.shape[1] < self.samples_length:
                     # print('size of utterance:{}, size:{}'.format(utterance, mel_spec.shape[1]))
                     # print('pick another wav')
@@ -154,14 +187,20 @@ class SpeechDataset3(Dataset):
                     # fn = os.path.join(folder_path, utterance)
                     # file = open(fn,'rb')
                     mel_spec = np.load(utterance)
+            print('mel shape:  ',mel_spec.shape[1])
+            i#print(': ', (mel_spec.shape[1] - self.samples_length))
             rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
+            print('rd begin: ', rd_begin)
+            # print()
             mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
-            # print('mel shape: ', len(mel_spec))
+            #print('mel spectrogram shape: ', mel_spec.shape)
             data.append(mel_spec)
             utterances.append(utterance)
             speaker_ids.append(speaker_id)
+
+        # print('data shape: ', data.shape)
         data = torch.tensor(data)
-        # print('data shape: ', data.shape) 
+         
         return data, utterances, speaker_ids
     def __len__(self):
         return len(self.speaker_ids)
