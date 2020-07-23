@@ -45,7 +45,8 @@ def get_male_spk(fp):
         if spk_gender[idx] == 'F':
             rmv_idx.append(idx)
             
-    spk_id = [spk for idx, spk in enumerate(spk_id) if idx not in rmv_idx]
+    spk_id = ['VCTK-Corpus_wav16_p'+spk for idx, spk in enumerate(spk_id) if idx not in rmv_idx]
+    spk_id.append('VCTK-Corpus_wav16_chunking_barackobama')
     return spk_id
 
 
