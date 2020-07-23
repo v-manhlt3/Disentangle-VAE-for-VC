@@ -177,7 +177,7 @@ class SpeechDataset3(Dataset):
             utterance = self.utterance_ids[speaker_id][rd_uttrance]
             mel_spec = np.load(utterance)
             # transpose for new new_encoder2 dataset
-            #mel_spec = np.transpose(mel_spec, (1, 0))
+            #mel_spec = np.transpose(mel_spec, (-1, -2))
             #print('mel spectrogram shape: ', mel_spec.shape)
             if mel_spec.shape[1] <= self.samples_length:
                 while mel_spec.shape[1] < self.samples_length:

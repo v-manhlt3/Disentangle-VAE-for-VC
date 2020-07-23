@@ -79,8 +79,58 @@ class Encoder(nn.Module):
             codes.append(torch.cat((out_forward[:,i+self.freq-1,:],out_backward[:,i,:]), dim=-1))
 
         return codes
-      
+
+####### Encoder with no speaker identity is fed into input###########################################
+
+def get_zeros_tensor(batch, dimensions):
+    return torch.zeros(batch, dimensions)
+
+class Encoder2(nn.Module):
+    """Encoder module:
+    """
+    def __init__(self, dim_neck, dim_emb, freq):
+        super(Encoder2, self).__init__()
+        self.dim_neck = dim_neck
+        self.freq = freq
         
+        convolutions = []
+        for i in range(3):
+            conv_layer = nn.Sequential(
+                ConvNorm(80+dim_emb if i==0 else 512,
+                         512,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='relu'),
+                nn.BatchNorm1d(512))
+            convolutions.append(conv_layer)
+        self.convolutions = nn.ModuleList(convolutions)
+        
+        self.lstm = nn.LSTM(512, dim_neck, 2, batch_first=True, bidirectional=True)
+
+    def forward(self, x, c_org):
+        x = x.squeeze(1).transpose(2,1)
+        c_org = c_org.unsqueeze(-1).expand(-1, -1, x.size(-1))
+        zeros_c_org = torch.zeros(c_org.shape[0], c_org.shape[1], c_org.shape[2]).cuda()
+        # print('x shape: ', x.shape)
+        # print('c_org shape', c_org.shape)
+        x = torch.cat((x, zeros_c_org), dim=1)
+        
+        for conv in self.convolutions:
+            x = F.relu(conv(x))
+        x = x.transpose(1, 2)
+        
+        self.lstm.flatten_parameters()
+        outputs, _ = self.lstm(x)
+        out_forward = outputs[:, :, :self.dim_neck]
+        out_backward = outputs[:, :, self.dim_neck:]
+        
+        codes = []
+        for i in range(0, outputs.size(1), self.freq):
+            codes.append(torch.cat((out_forward[:,i+self.freq-1,:],out_backward[:,i,:]), dim=-1))
+
+        return codes
+      
+########################################################################################################
 class Decoder(nn.Module):
     """Decoder module:
     """
@@ -174,7 +224,7 @@ class Generator(nn.Module):
     def __init__(self, dim_neck, dim_emb, dim_pre, freq):
         super(Generator, self).__init__()
         
-        self.encoder = Encoder(dim_neck, dim_emb, freq)
+        self.encoder = Encoder2(dim_neck, dim_emb, freq)
         self.decoder = Decoder(dim_neck, dim_emb, dim_pre)
         self.postnet = Postnet()
 
@@ -198,18 +248,10 @@ class Generator(nn.Module):
         
         mel_outputs = mel_outputs.unsqueeze(1)
         mel_outputs_postnet = mel_outputs_postnet.unsqueeze(1)
-        #print(mel_outputs.shape)
-        #print(mel_outputs_postnet.shape)
-        #print(torch.cat(codes, dim=-1).shape)
         
-        return (mel_outputs, mel_outputs_postnet, torch.cat(codes, dim=-1))
+        return mel_outputs, mel_outputs_postnet, torch.cat(codes, dim=-1)
 
 
 if __name__=='__main__':
-    data = torch.randn(20,160,80).cuda()
-    code = torch.randn(20,256).cuda()
-    #generator = Generator(32, 256, 512, 32).cuda()
-    #output, postnet, codes = generator(data, code, c_trg=code)
-    #print(output.shape)
-    #print(postnet.shape)
-    #print(codes.shape)
+    data = torch.randn(20,80,67)
+    generator = Generator(32, 256, 512, 32)

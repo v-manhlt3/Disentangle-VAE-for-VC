@@ -45,7 +45,7 @@ def trainning_procedure(config):
     dataset_path = Path(dataset_path)
     dataset = SpeechDataset3(dataset_path, samples_length=64,
                             num_utterances=config['num_utterances'], male_dataset=False)
-    loader = DataLoader(dataset, num_workers=8,
+    loader = DataLoader(dataset, num_workers=2,
                         batch_size=config['num_speakers'],
                         pin_memory=True, shuffle=True, drop_last=True)
 
@@ -70,7 +70,7 @@ def trainning_procedure(config):
     )
     init_step = 0
     if config['load_ckp']:
-        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_20000.pt'))
+        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_120000.pt'))
         #ckp = torch.load('/home/ubuntu/autovc_vctk_final2/save_ckp/model_ckp_790000.pt')
         optimizer.load_state_dict(ckp['optimizer'])
         init_step = ckp['iteration']
@@ -201,9 +201,9 @@ def convert_voice(loader, config, step):
 
 def convert_voice_wav(config):
 
-        trg_fp = '/home/ubuntu/VCTK-Corpus/new_encoder3/VCTK-Corpus_wav16_p225/p225_005.npy'
+        trg_fp = '/home/ubuntu/VIVOS/mel_spectrogram_autovc/VIVOS_wav16_VIVOSSPK02/VIVOSSPK02_R002.npy'
         #src_fp = '/home/ubuntu/VCTK-Corpus/new_encoder2/VCTK-Corpus_wav16_p227/p227_002.npy'
-        src_fp = '/home/ubuntu/VCTK-Corpus/new_encoder3/VCTK-Corpus_wav16_p225/p225_001.npy'
+        src_fp = '/home/ubuntu/VIVOS/mel_spectrogram_autovc/VIVOS_wav16_VIVOSSPK01/VIVOSSPK01_R002.npy'
         src_mel = np.load(src_fp, allow_pickle=True)
         trg_mel = np.load(trg_fp, allow_pickle=True)
 
@@ -245,9 +245,9 @@ def convert_voice_wav(config):
         speaker_emb = SpeakerEncoder(device, device).to(device)
         emb_ckt = torch.load(config['emb_model_path'])
         speaker_emb.load_state_dict(emb_ckt['model_state'])
-        generator = Generator(32, 256, 512, 32).to(device)
-        #generator = Generator(64, 256, 512,16).to(device)
-        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_300000.pt'))
+        #generator = Generator(32, 256, 512, 32).to(device)
+        generator = Generator(64, 256, 512,16).to(device)
+        ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_100000.pt'))
         init_step = ckp['iteration']
         generator.load_state_dict(ckp['model_state'])
 
@@ -255,9 +255,11 @@ def convert_voice_wav(config):
         ckpt = torch.load('/home/ubuntu/checkpoint_step001000000_ema.pth')
         vocoder_model.load_state_dict(ckpt['state_dict'])
         ##############################################################
-        print('src_mel shape: ', src_mel.shape)
-        src_identity = speaker_emb(src_mel[:,50:113,:]).to(device)
-        trg_identity = speaker_emb(trg_mel[:,50:113,:]).to(device)
+        # print('src_mel shape: ', src_mel.shape)
+        rnd_emb_src = np.random.choice((src_mel.shape[1]-63),1)
+        rnd_emb_trg = np.random.choice((trg_mel.shape[1]-63),1)
+        src_identity = speaker_emb(src_mel[:,rnd_emb_src:rnd_emb_src+63,:]).to(device)
+        trg_identity = speaker_emb(trg_mel[:,rnd_emb_trg:rnd_emb_trg+63,:]).to(device)
 
         _, mel_outputs_postnet,_ = generator(src_mel, src_identity, trg_identity)
         _, mel_outputs_postnet2,_ = generator(src_mel, src_identity, src_identity)
@@ -273,8 +275,8 @@ def convert_voice_wav(config):
             # trg_utterance_id = batch[1][i][rnd_choice[1]].split('/')
             # trg_utterance_id = trg_utterance_id[-1].split('.')
             # trg_utterance_id = trg_utterance_id[0]
-            trg_utterance_id = 'p225_005'
-            src_utterance_id = 'p225_001'
+            trg_utterance_id = 'VIVOSSPK02_002'
+            src_utterance_id = 'VIVOSSPK01_002'
 
             fn = src_utterance_id + '_to_' + trg_utterance_id
             print('converting '+src_utterance_id+  ' to ' + trg_utterance_id)
