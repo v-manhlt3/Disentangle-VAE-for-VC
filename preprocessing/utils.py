@@ -2,9 +2,14 @@ import librosa
 import librosa.filters
 import numpy as np
 from preprocessing.hparams import hparams
-#from hparams import hparams
-#from hparams_autovc import hparams
+# from hparams import hparams
+# from hparams_autovc import hparams
 from scipy.io import wavfile
+import math
+import pyworld as pw
+import torch
+
+
 
 
 def load_wav(path):
@@ -138,3 +143,63 @@ def _denormalize(S):
     return (np.clip(S, 0, 1) * -hparams.min_level_db) + hparams.min_level_db
 
 # print(hparams.fft_size)
+######################### Operation for pitch tracking ##################################
+
+pitch_bins = 257
+
+def pitch_tracking(wav, mel):
+    result = np.zeros((1,mel.shape[1]))
+    pitch, mag = librosa.piptrack(y=wav, sr=16000, S=mel)
+    for i in range(pitch.shape[1]):
+        result[0][i] = np.max(pitch[:,i])
+
+    mean = get_mean(result)
+    var = get_variance(result)
+    result = (result-mean)/var
+
+    return result
+
+def get_mean(arr):
+    mean = 0
+    # mean = np.mean(arr)
+    for ele in arr:
+        mean += ele
+    return mean/(arr.shape[0])
+
+def get_variance(arr, mean):
+    variance = 0
+    for ele in arr:
+        variance += math.pow((ele-mean), 2)
+    # var = np.var(arr, axis=0)
+    return variance/(arr.shape[0])
+
+# def discrete_pitch(pitch_frame):
+
+#     for idx in range(pitch_frame.shape[1]):
+#         if pitch_frame[0][idx] < -0.9:
+#             pitch_frame[0][idx] = 0
+#         else
+
+def estimate_pitch(segment, sr, fmin=50.0, fmax=2000.0):
+    
+    f_0, t = pw.dio(segment, sr)
+    f_0_min = np.min(f_0)
+    f_0_max = np.max(f_0)
+
+    f_0 = (f_0 - f_0_min) / f_0_max
+    f_0 = np.ceil(f_0*256)
+
+    return f_0
+
+def get_batch_pitch(batch_data, sr):
+
+    batch_pitch = []
+    for data in batch_data:
+        # print('waveform data: ', data)
+        data = data.detach().cpu().numpy().astype(np.float64)
+        pitch = estimate_pitch(data, sr=sr)
+        # print('pitch shape: ', pitch.shape)
+        batch_pitch.append(pitch)
+    # print('batch pitch data: ', batch_pitch)
+    return torch.from_numpy(np.stack(batch_pitch)) 
+    

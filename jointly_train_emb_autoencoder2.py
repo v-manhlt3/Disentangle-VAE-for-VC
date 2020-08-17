@@ -9,7 +9,7 @@ import librosa.display
 import os
 from autovc_replicate.original_autovc import Encoder, Decoder, Generator
 import argparse
-import json
+import glob
 from autovc_replicate.speaker_emb import SpeakerEncoder
 from pathlib import Path
 import math
@@ -81,10 +81,17 @@ def trainning_procedure(config):
 
     while True:
         for _, speakers_batch in enumerate(loader, init_step):
- 
+            
+            obama_utt = dataset.get_obama_samples()
+            obama_data = obama_utt[0].type(torch.FloatTensor).to(device)
+            obama_data = obama_data.view(-1, obama_data.shape[-2], obama_data.shape[-1])
+            obama_data = torch.transpose(obama_data, -1, -2)
+
             data = speakers_batch[0].type(torch.FloatTensor).to(device)
             data = data.view(-1, data.shape[-2], data.shape[-1])
             data = torch.transpose(data, -1, -2)
+
+            data = torch.cat((data, obama_data), dim=0)
             sync(device)
             spk_embs = speaker_emb(data).to(device)
             # print('spk_emb shape:', spk_embs.shape)
@@ -201,11 +208,26 @@ def convert_voice(loader, config, step):
 
 def convert_voice_wav(config):
 
-        trg_fp = '/home/ubuntu/VCTK_mel/VCTK-Corpus_wav16_obama/obama_0.npy'
+        speaker_emb = SpeakerEncoder(device, device).to(device)
+        emb_ckt = torch.load(config['emb_model_path'])
+        speaker_emb.load_state_dict(emb_ckt['model_state'])
+
+        trg_fp = '/home/ubuntu/VCTK_mel/VCTK-Corpus_wav16_obama/'
         #src_fp = '/home/ubuntu/VCTK-Corpus/new_encoder2/VCTK-Corpus_wav16_p227/p227_002.npy'
-        src_fp = '/home/ubuntu/VCTK_mel/VCTK-Corpus_wav16_trungstage/trung-obutt1m4a_jgDYmXse_9.npy'
+        src_fp = '/home/ubuntu/VCTK_mel/VCTK-Corpus_wav16_trungstage/trung-obutt1m4a_jgDYmXse_'+str(config['file_num'])+'.npy'
+        # src_mel_fp = glob.glob(os.path.join(src_fp,'*.npy'))
+        # trg_mel = np.load(trg_fp, allow_pickle=True)
         src_mel = np.load(src_fp, allow_pickle=True)
-        trg_mel = np.load(trg_fp, allow_pickle=True)
+        dataset_path = os.path.join(config['data_path'])
+        dataset_path = Path(dataset_path)
+        dataset = SpeechDataset3(dataset_path, samples_length=64,
+                            num_utterances=32, male_dataset=False)
+
+        obama_utt = dataset.get_obama_samples()
+        obama_data = obama_utt[0].type(torch.FloatTensor).to(device)
+        obama_data = obama_data.view(-1, obama_data.shape[-2], obama_data.shape[-1])
+        obama_data = torch.transpose(obama_data, -1, -2)
+        trg_mel = obama_data
 
         wav_path = os.path.join(config['save_path'], 'convert_voice', 'wav')
         if not os.path.exists(wav_path):
@@ -213,15 +235,13 @@ def convert_voice_wav(config):
         plt_path = os.path.join(config['save_path'], 'convert_voice', 'plot')
         if not os.path.exists(plt_path):
             os.mkdir(plt_path)
+
+        # for src_mel in src_mel_fp
         padding = 32-(src_mel.shape[1]%32)
-        # src_mel = np.pad(src_mel, (0, padding), "constant", 0)
-        # batch = next(iter(loader))
-        # data = batch[0].type(torch.FloatTensor).to(device)
-        # rnd_choice = np.random.choice(4,2,replace=False)
         src_mel = torch.from_numpy(src_mel)
         src_mel = torch.nn.functional.pad(src_mel, (padding, 0), "constant", 0)
         src_mel = src_mel.unsqueeze(0).type(torch.FloatTensor).to(device)
-        trg_mel = torch.from_numpy(trg_mel).unsqueeze(0).type(torch.FloatTensor).to(device)
+        trg_mel = trg_mel.to(device)
         
         '''
         shape of batch is (data, utterances_id, speakers_id)
@@ -229,22 +249,14 @@ def convert_voice_wav(config):
         utterance id shape is (utterance shape, speaker shape)
         '''
 
-        # src_mel = data[rnd_choice[0]]
-        # src_speaker_id = batch[2][0][rnd_choice[0]]
-        #src_mel = src_mel[:,:160,:]
         src_mel = torch.transpose(src_mel, -1, -2)
-        #src_mel = torch.nn.functional.pad(src_mel, (0, 6), "constant", 0)
+
         print('src mel shape: ', src_mel.shape)
-        
+        print('trg mel shape: ', trg_mel.shape)
 
-        
-        trg_mel = torch.transpose(trg_mel, -1, -2)[:,:,:]
-        # trg_speaker_id = batch[2][0][rnd_choice[1]]
-
+        # trg_mel = torch.transpose(trg_mel, -1, -2)[:,:,:]
         ###### Load model from ckp file ##################################
-        speaker_emb = SpeakerEncoder(device, device).to(device)
-        emb_ckt = torch.load(config['emb_model_path'])
-        speaker_emb.load_state_dict(emb_ckt['model_state'])
+        
         #generator = Generator(32, 256, 512, 32).to(device)
         generator = Generator(64, 256, 512,16).to(device)
         ckp = torch.load(os.path.join(config['save_path'],'save_ckp','model_ckp_'+str(config['iterations'])+'.pt'))
@@ -257,9 +269,14 @@ def convert_voice_wav(config):
         ##############################################################
         # print('src_mel shape: ', src_mel.shape)
         rnd_emb_src = np.random.choice((src_mel.shape[1]-64),1)[0]
-        rnd_emb_trg = np.random.choice((trg_mel.shape[1]-64),1)[0]
+        # rnd_emb_trg = np.random.choice((trg_mel.shape[1]-64),1)[0]
         src_identity = speaker_emb(src_mel[:,rnd_emb_src:rnd_emb_src+63,:]).to(device)
-        trg_identity = speaker_emb(trg_mel[:,rnd_emb_trg:rnd_emb_trg+63,:]).to(device)
+        trg_identity = speaker_emb(trg_mel[:,:,:]).to(device)
+        trg_identity = torch.mean(trg_identity, dim=0)
+        trg_identity = trg_identity.unsqueeze(0)
+        print('trg_identity shape: ', trg_identity.shape)
+        # trg_identity = trg_identity.squeeze(0).repeat(src_identity.shape[0], 1)
+        # print('trg_identity shape: ', trg_identity.shape)
 
         _, mel_outputs_postnet,_ = generator(src_mel[:,:,:], src_identity, trg_identity)
         _, mel_outputs_postnet2,_ = generator(src_mel[:,:,:], src_identity, src_identity)
@@ -275,8 +292,8 @@ def convert_voice_wav(config):
             # trg_utterance_id = batch[1][i][rnd_choice[1]].split('/')
             # trg_utterance_id = trg_utterance_id[-1].split('.')
             # trg_utterance_id = trg_utterance_id[0]
-            trg_utterance_id = 'obama_speech_0'
-            src_utterance_id = 'trung_09'
+            trg_utterance_id = 'obama'
+            src_utterance_id = 'trung_'+str(config['file_num'])
 
             fn = src_utterance_id + '_to_' + trg_utterance_id
             print('converting '+src_utterance_id+  ' to ' + trg_utterance_id)
@@ -336,6 +353,7 @@ if __name__ == '__main__':
     parse.add_argument('--training', default=True, type=bool)
     parse.add_argument('--z_dim', default=64, type=int)
     parse.add_argument('--iterations', default=10000, type=int)
+    parse.add_argument('--file_num', default=0, type=int)
     args = parse.parse_args()
 
     config = dict(
@@ -351,9 +369,10 @@ if __name__ == '__main__':
         save_path=args.save_path,
         mode=args.training,
         z_dim=args.z_dim,
-        iterations=args.iterations
+        iterations=args.iterations,
+        file_num=args.file_num
     )
 
-    #trainning_procedure(config)
-    convert_voice_wav(config)
+    trainning_procedure(config)
+    #convert_voice_wav(config)
     

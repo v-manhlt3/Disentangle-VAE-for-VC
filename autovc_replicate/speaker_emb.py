@@ -67,7 +67,6 @@ class SpeakerEncoder(nn.Module):
     def similarity_matrix(self, embeds):
         """
         Computes the similarity matrix according the section 2.1 of GE2E.
-
         :param embeds: the embeddings as a tensor of shape (speakers_per_batch, 
         utterances_per_speaker, embedding_size)
         :return: the similarity matrix as a tensor of shape (speakers_per_batch,
@@ -93,17 +92,7 @@ class SpeakerEncoder(nn.Module):
         for j in range(speakers_per_batch):
             mask = np.where(mask_matrix[j])[0]
             sim_matrix[mask, :, j] = (embeds[mask] * centroids_incl[j]).sum(dim=2)
-            sim_matrix[j, :, j] = (embeds[j] * centroids_excl[j]).sum(dim=1)
-        
-        ## Even more vectorized version (slower maybe because of transpose)
-        # sim_matrix2 = torch.zeros(speakers_per_batch, speakers_per_batch, utterances_per_speaker
-        #                           ).to(self.loss_device)
-        # eye = np.eye(speakers_per_batch, dtype=np.int)
-        # mask = np.where(1 - eye)
-        # sim_matrix2[mask] = (embeds[mask[0]] * centroids_incl[mask[1]]).sum(dim=2)
-        # mask = np.where(eye)
-        # sim_matrix2[mask] = (embeds * centroids_excl).sum(dim=2)
-        # sim_matrix2 = sim_matrix2.transpose(1, 2)
+            sim_matrix[j, :, j] = (embeds[j] * centroids_excl[j]).sum(dim=1)      
         
         sim_matrix = sim_matrix * self.similarity_weight + self.similarity_bias
         return sim_matrix

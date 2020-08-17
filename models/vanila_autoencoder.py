@@ -116,10 +116,10 @@ class Encoder(nn.Module):
 
         self.lstm.flatten_parameters()
 
-        shape1 = out.shape
-        batch = shape[0]
-        sequence_length = shape1[2]
-        input_sq_size = shape[1]
+        # shape1 = out.shape
+        # batch = shape[0]
+        # sequence_length = shape1[2]
+        # input_sq_size = shape[1]
 
         outputs, _ = self.lstm(out)
         outs_forward = outputs[:,:,:self.dim_neck]

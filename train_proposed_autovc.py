@@ -1,8 +1,8 @@
 import torch
 from torch.utils.data import DataLoader, Dataset
 from preprocessing.encoder.data_objects import SpeakerVerificationDataLoader, SpeakerVerificationDataset
+from preprocessing.dataset_mel import SpeechDataset4
 from pathlib import Path
-from preprocessing.dataset_mel import SpeechDataset3
 import matplotlib.pyplot as plt
 import librosa
 import librosa.display
@@ -27,9 +27,13 @@ def sync(device: torch.device):
         torch.cuda.synchronize(device)
     else:
         torch.cpu.synchronize(device)
-# def get_losses():
-#         loss = 0
-#         return loss
+
+def get_mfcc(datas):
+    tensor_mfcc = []
+    for data in datas:
+        mfcc = data.
+    return tensor_mfcc
+
 def shuffle_utt(spk_embs, num_speakers, num_utterances):
     result = []
     for i in range(num_speakers):
@@ -43,20 +47,26 @@ def trainning_procedure(config):
     writer = SummaryWriter(os.path.join(config['save_path'], 'logs'))
     dataset_path = os.path.join(config['data_path'])
     dataset_path = Path(dataset_path)
-    dataset = SpeechDataset3(dataset_path, samples_length=64,
-                            num_utterances=config['num_utterances'], male_dataset=False)
-    loader = DataLoader(dataset, num_workers=2,
+    dataset = SpeechDataset4(num_utterances=10)
+    loader = DataLoader(dataset, 
                         batch_size=config['num_speakers'],
+                        num_workers=0,
                         pin_memory=True, shuffle=True, drop_last=True)
 
-    #print('speaker ids: ',dataset.speaker_ids)
-    #print('----------------------------------------------')
-    #print('utterances ids: ',dataset.utterance_ids)    
+  
     speaker_emb = SpeakerEncoder(device, device)
     emb_ckt = torch.load(config['emb_model_path'])
     speaker_emb.load_state_dict(emb_ckt['model_state'])
+    
+    ################ model architecture #######################################################
     #generator = Generator(32, 256, 512, 32).to(device)
-    generator = Generator(config['z_dim'], 256, 512,16).to(device)
+    # generator = Generator(config['z_dim'], 256, 512).to(device)
+    encoder_spk_emb = Encoder()
+    encoder_content = Encoder()
+
+    decoder_content = Decoder(latent_dim=256)
+    decoder = Decoder(latent_dim=512)
+    ##########################################################################################
     model_params = list(generator.parameters()) + list(speaker_emb.parameters())
     optimizer = torch.optim.Adam(
         # model_params,
@@ -83,23 +93,21 @@ def trainning_procedure(config):
         for _, speakers_batch in enumerate(loader, init_step):
  
             data = speakers_batch[0].type(torch.FloatTensor).to(device)
-            data = data.view(-1, data.shape[-2], data.shape[-1])
+            data = data.view(-1, data.shape[-3], data.shape[-2])
             data = torch.transpose(data, -1, -2)
-            sync(device)
+
+            mfcc_data = speakers_batch[3].type(torch.FloatTensor).to(device)
+            mfcc_data = data.view(-1, data.shape[-3], data.shape[-2])
+            mfcc_data = torch.transpose(data, -1, -2)
+            
             spk_embs = speaker_emb(data).to(device)
-            # print('spk_emb shape:', spk_embs.shape)
-            # emb_loss = spk_embs.view((config['num_speakers'], config['num_utterances'], -1)).to(device)
-            # loss_emb,_ = speaker_emb.loss(emb_loss)
+            embeds_loss = embeds.view((config['num_speakers'], config['num_utterances'], -1)).to(loss_device)
+            loss_emb, eer = model.loss(embeds_loss)
+            if eer==0:
+                continue
 
-            ################### Shuffle utterances belong to a speaker #####################
-            shuffle_spk_embs = shuffle_utt(spk_embs, config['num_speakers'], config['num_utterances'])
-            shuffle_spk_embs = shuffle_spk_embs.view(-1, 256)
-            ##############################################################################
-            # print('shuffle_spk_embs shape: ', shuffle_spk_embs.shape)
-            sync(device)
 
-            mel_outputs, mel_outputs_posnet, encoder_out = generator(
-                data, c_org=spk_embs, c_trg=spk_embs)
+            mel_outputs, mel_outputs_posnet, encoder_out = generator(data)
             mel_outputs_posnet = mel_outputs_posnet.squeeze(1)
             mel_outputs = mel_outputs.squeeze(1)
 
@@ -115,23 +123,24 @@ def trainning_procedure(config):
             loss = loss_content + loss_recon + loss_recon_zero 
             sync(device)
 
-
-            # speaker_emb.similarity_weight.retain_grad()
-            # speaker_emb.similarity_bias.retain_grad()
-            # speaker_emb.zero_grad()
-            # loss_emb.backward()
             if math.isnan(loss.item()):
                 print('loss is nan')
                 continue
+
+            speaker_emb.similarity_weight.retain_grad()
+            speaker_emb.similarity_bias.retain_grad()
+            speaker_emb.zero_grad()
+            loss_emb.backward()
+
             loss.backward()
             optimizer.step()
-            # speaker_emb_optimizer.step()
+            speaker_emb_optimizer.step()
             ########## write log #############################3
             if step % 1000:
                 writer.add_scalar('Loss\Reconstruction Loss', loss_recon, step)
                 writer.add_scalar('Loss\Reconstruction Loss Zero', loss_recon_zero, step)
                 writer.add_scalar('Loss\Content Loss', loss_content, step)
-                # writer.add_scalar('Loss\Speaker Embedding Loss', loss_emb, step)
+                writer.add_scalar('Loss\Speaker Embedding Loss', loss_emb, step)
             ##################################################
             
             print('iteration:{}-----Loss: {}'.format(step, loss.item()))
