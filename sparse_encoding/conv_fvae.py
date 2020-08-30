@@ -3,8 +3,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch import nn, optim
+from torch.autograd import Variable
 from torch.nn import functional as F 
-from sparse_encoding.variational_base_model import VariationalBaseModel
+from sparse_encoding.variational_base_fvae import VariationalBaseModel
+import timeit
+from sparse_encoding import utils
+import torch.nn.init as init
+
+
+torch.autograd.set_detect_anomaly(True)
+def timer(function):
+  def new_function(mu, logvar, is_cuda, batch_labels):
+    start_time = timeit.default_timer()
+    function(mu, logvar, is_cuda, batch_labels)
+    elapsed = timeit.default_timer() - start_time
+    print('Function "{name}" took {time} seconds to complete.'.format(name=function.__name__, time=elapsed))
+  return new_function
+
 
 def init_weights(m):
     if type(m) == nn.Linear:
@@ -13,6 +28,37 @@ def init_weights(m):
     if type(m) == nn.Conv1d:
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0)
+
+def kaiming_init(m):
+    if isinstance(m, (nn.Linear, nn.Conv2d)):
+        init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            m.bias.data.fill_(0)
+    elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
+        m.weight.data.fill_(1)
+        if m.bias is not None:
+            m.bias.data.fill_(0)
+
+
+def normal_init(m):
+    if isinstance(m, (nn.Linear, nn.Conv2d)):
+        init.normal_(m.weight, 0, 0.02)
+        if m.bias is not None:
+            m.bias.data.fill_(0)
+    elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
+        m.weight.data.fill_(1)
+        if m.bias is not None:
+            m.bias.data.fill_(0)
+
+### tile the output n times ##################################
+def tile(a, dim, n_tile):
+    init_dim = a.size(dim)
+    repeat_idx = [1] * a.dim()
+    repeat_idx[dim] = n_tile
+    a = a.repeat(*(repeat_idx))
+    order_index = torch.cuda.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]))
+    return torch.index_select(a, dim, order_index)
+
 
 class LinearNorm(torch.nn.Module):
     def __init__(self, in_dim, out_dim, bias=True, w_init_gain='linear'):
@@ -48,18 +94,20 @@ class ConvNorm(torch.nn.Module):
         return conv_signal
 
 
-class ConvVSC(nn.Module):
+class FVAE(nn.Module):
 
     def __init__(self, input_sz = (1, 64, 80),
                 kernel_szs = [512,512,512],
                 hidden_sz: int = 256,
                 latent_sz: int = 32,
-                c: float = 100,
+                c: float = 512,
                 c_delta: float = 0.001,
                 beta: float = 0.1,
                 beta_delta: float = 0,
-                dim_neck=64, latent_dim=256, dim_pre=512):
-        super(ConvVSC, self).__init__()
+                dim_neck=64, latent_dim=256, dim_pre=512, batch_size=10):
+        super(FVAE, self).__init__()
+
+        self.batch_size = batch_size
         self._input_sz = input_sz
         self._channel_szs = [input_sz[0]] + kernel_szs
         self._hidden_sz = hidden_sz
@@ -85,13 +133,14 @@ class ConvVSC(nn.Module):
             self.enc_modules.append(conv_layer)
         self.enc_modules = nn.ModuleList(self.enc_modules)
         self.enc_lstm = nn.LSTM(dim_pre, dim_neck, 2, batch_first=True, bidirectional=True)
-        self.mu = LinearNorm(8192, latent_dim) # length=64, 8192
+        self.enc_linear = LinearNorm(8192, 512)
 
-        self.logvar = LinearNorm(8192, latent_dim)
-        self.logspike = LinearNorm(8192, latent_dim)
+        self.mu = LinearNorm(512, latent_dim) # length=64, 8192
+        self.logvar = LinearNorm(512, latent_dim)
 
         ############################ Decoder Architecture ####################
-        self.dec_linear = nn.Linear(latent_dim, 8192)
+        self.dec_pre_linear1 = LinearNorm(latent_dim, 512)
+        self.dec_pre_linear2 = LinearNorm(512, 8192)
         self.dec_lstm1 = nn.LSTM(dim_neck*2, 512, 1, batch_first=True)
         self.dec_modules = []
 
@@ -124,30 +173,25 @@ class ConvVSC(nn.Module):
         self.enc_lstm.flatten_parameters()
 
         outputs, _ = self.enc_lstm(x)
-        # outs_forward = outputs[:,:,:self.dim_neck]
-        # outs_backward = outputs[:,:,self.dim_neck:]
-        # print('---------------------encoders output: ', outputs.shape)
         outputs = outputs.reshape(shape[0], -1)
+        outputs = self.enc_linear(outputs)
 
         mu = self.mu(outputs)
         logvar = self.logvar(outputs)
-        logspike = -F.relu(-self.logspike(outputs))
 
-        return mu, logvar, logspike
+        
+        return mu, logvar
 
-    def reparameterize(self, mu, logvar, logspike):
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
-
-        gaussian =  eps.mul(std).add_(mu)
-        eta = torch.randn_like(std)
-        selection = F.sigmoid(self._c*(eta +  logspike.exp()-1))
-
-        return selection.mul(gaussian)
+    def reparameterize(self, mu, logvar):
+        epsilon = Variable(torch.empty(logvar.size()).normal_()).cuda()
+        std = logvar.mul(0.5).exp_()
+        return epsilon.mul(std).add_(mu)
 
     def decode(self, z):
+        
         # print('latent size: ',z.shape)
-        output = self.dec_linear(z)
+        output = self.dec_pre_linear1(z)
+        output = self.dec_pre_linear2(output)
         output = output.view(z.shape[0],-1, self.dim_neck*2)
         
         # print('-------------- decoder input shape: ', output.shape)
@@ -164,15 +208,16 @@ class ConvVSC(nn.Module):
         return output.transpose(-1, -2)
 
     def forward(self, x, train=True):
-        mu, logvar, logspike = self.encode(x)
+        mu, logvar  = self.encode(x)
+        # print('group style mu shape: ', group_style_mu.shape)
         if train:
-            z =  self.reparameterize(mu, logvar, logspike)
+            z =  self.reparameterize(mu, logvar)
         else:
             z = mu
-        
+
         x_hat0 = self.decode(z)
         x_hat = x_hat0 + self.postnet(x_hat0)
-        return x_hat0, x_hat, mu, logvar, logspike
+        return x_hat0, x_hat, mu, logvar, z
 
     def update_c(self):
         self._c += self._c_delta
@@ -226,11 +271,44 @@ class Postnet(nn.Module):
 
         return x 
 
+###################  Discriminator for latent space come from q(z) or q_bar(z) #####################################################
+class Discriminator(nn.Module):
+    def __init__(self, z_dim):
+        super(Discriminator, self).__init__()
+        self.z_dim = z_dim
+        self.net = nn.Sequential(
+            nn.Linear(z_dim, 1000),
+            nn.LeakyReLU(0.2, True),
+            nn.Linear(1000, 1000),
+            nn.LeakyReLU(0.2, True),
+            nn.Linear(1000, 1000),
+            nn.LeakyReLU(0.2, True),
+            nn.Linear(1000, 1000),
+            nn.LeakyReLU(0.2, True),
+            nn.Linear(1000, 1000),
+            nn.LeakyReLU(0.2, True),
+            nn.Linear(1000, 2),
+        )
+        self.weight_init()
 
-class ConvolutionalVSC(VariationalBaseModel):
+    def weight_init(self, mode='normal'):
+        if mode == 'kaiming':
+            initializer = kaiming_init
+        elif mode == 'normal':
+            initializer = normal_init
+
+        for block in self._modules:
+            for m in self._modules[block]:
+                initializer(m)
+
+    def forward(self, z):
+        return self.net(z).squeeze()
+####################################################################################################################################
+
+class ConvolutionalFVAE(VariationalBaseModel):
     def __init__(self, dataset, width, height,
                 latent_sz, learning_rate, alpha,
-                log_interval, normalize, batch_size, channels=1, device=torch.device("cuda"),
+                log_interval, normalize, batch_size, gamma,channels=1, device=torch.device("cuda"),
                 latent_dim=256, beta=0.1):
         super().__init__(dataset, width, height, channels,latent_sz, learning_rate,
                         device, log_interval, batch_size)
@@ -238,48 +316,49 @@ class ConvolutionalVSC(VariationalBaseModel):
         self.alpha = alpha
         self.lr= learning_rate
         self.latent_dim = latent_dim
+        self.gamma = gamma
         # self.hidden_sz = hidden_sz
         # self.kernel_szs = [int(ks) for ks in str(kernel_szs).split(',')]
 
-        self.model = ConvVSC(latent_dim=self.latent_dim, beta=0.1).to(device)
+        self.model = FVAE(latent_dim=self.latent_dim, beta=0.1, batch_size=batch_size).to(device)
+        self.D = Discriminator(latent_dim).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        self.D_optimizer = optim.Adam(self.D.parameters(), lr=(1e-1*self.lr))
         self.train_losses = []
         self.test_losses = []
 
+        # self.zeros = torch.zeros(batch_size, dtype=torch.long).cuda()
+        # self.ones = torch.ones(batch_size, dtype=torch.long).cuda()
+
     # Reconstruction + KL divergence loss sumed over all elements of batch
-    def loss_function(self, x, x_recon0, x_recon, mu, logvar, logspike, train=False):
+    def loss_function(self, x, x_recon0, x_recon, mu, logvar, z, train=False):
         
         shape = x.shape
-        # print('-------------------shape of mel: ', x.shape)
-        # print('-------------------shape of recons mel: ', x_recon0.shape)
-        MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum')
-        MSE = torch.nn.functional.l1_loss(x, x_recon, reduction='sum')
-        # MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum')/self.batch_size
-        # MSE = torch.nn.functional.l1_loss(x, x_recon, reduction='sum')/self.batch_size
+        D_z = self.D(z)
 
-        spike= torch.clamp(logspike.exp(), 1e-6, 1.0 - 1e-6)
+        MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum').div(self.batch_size)
+        MSE = torch.nn.functional.l1_loss(x, x_recon, reduction='sum').div(self.batch_size)
 
-        prior1 = -0.5 * torch.sum(spike.mul(1 + logvar - mu.pow(2) - logvar.exp()))
-        prior21 = (1 - spike).mul(torch.log((1 - spike) / (1 - self.alpha)))
-        prior22 = spike.mul(torch.log(spike /  self.alpha))
-        prior2 = torch.sum(prior21 + prior22)
-        PRIOR = torch.mean(prior1 + prior2)
+        kl_loss = (-0.5)*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()).sum().div(self.batch_size)
+        vae_tc_loss = (D_z[:,:1] - D_z[:,1:]).sum().div(self.batch_size)
 
-        LOSS = MSE0 + MSE + self.model._beta*PRIOR
-
-        # log = {
-        #     'LOSS': LOSS.item(),
-        #     'MSE': MSE.item(),
-        #     'PRIOR': PRIOR.item(),
-        #     'prior1': prior1.item(),
-        #     'prior2': prior2.item()
-        # }
-        # if train:
-        #     self.train_losses.append(log)
-        # else:
-        #     self.test_losses.append(log)
         
-        return LOSS, MSE0,MSE, PRIOR
+        
+
+        LOSS = MSE0 + MSE + self.model._beta*kl_loss - self.gamma*vae_tc_loss
+        
+        return LOSS, MSE0,MSE, kl_loss, vae_tc_loss
+
+    def dis_loss_function(self, z, z_prime):
+
+        D_z = self.D(z)
+        z_permutation = utils.permute_dims(z_prime).detach()
+        D_z_permu = self.D(z_permutation)
+        zeros = torch.zeros(D_z.shape[0], dtype=torch.long).cuda()
+        ones = torch.ones(D_z.shape[0], dtype=torch.long).cuda()
+        dis_tc_loss = 0.5*(F.cross_entropy(D_z, zeros) + F.cross_entropy(D_z_permu, ones))
+
+        return dis_tc_loss
 
     def update_(self):
         self.model.update_c()

@@ -47,19 +47,31 @@ class VariationalBaseModel():
         raise NotImplementedError
     
     
-    def step(self, data, train=False):
+    def step(self, data1, data2,train=False):
         if train:
             self.optimizer.zero_grad()
-        shape = data.shape
+            
+        # shape = data.shape
         # data = data.view(shape[0]*shape[1], shape[2], shape[3])
-        output0, output,mu,logvar,logspike = self.model(data)
+        output0, output, mu, logvar, z = self.model(data1)
+        
         output =  torch.clamp(output, min=0, max=1.0)
 
-        loss, recons_loss0, recons_loss, prior_loss = self.loss_function(data, output0, output,mu, logvar,logspike, train=train)
+        loss, recons_loss0, recons_loss, kl_loss, vae_tc_loss = \
+        self.loss_function(data1, output0, output,mu, logvar,z, train=train)
         if train:
-            loss.backward()
+            loss.backward(retain_graph=True)
             self.optimizer.step()
-        return loss.item(), recons_loss.item(), prior_loss.item()
+
+        z_prime = self.model.reparameterize(*self.model.encode(data2))
+        z_prime = z_prime.detach()
+        z = z.detach()
+        dis_tc_loss = self.dis_loss_function(z, z_prime)
+        self.D_optimizer.zero_grad()
+        dis_tc_loss.backward()
+        self.D_optimizer.step()
+
+        return loss.item(), recons_loss.item(), kl_loss.item(), dis_tc_loss.item(), vae_tc_loss.item()
     
     # TODO: Perform transformations inside DataLoader (extend datasets.MNIST)
     def transform(self, batch):
@@ -96,14 +108,18 @@ class VariationalBaseModel():
     def train(self, train_loader, epoch, logging_func=print):
         self.model.train()
         train_loss = 0
-        total_recons_loss, total_prior_loss = 0, 0
-        for batch_idx, (data, _,_) in enumerate(tqdm(train_loader)):
+        total_recons_loss, total_kl_loss, total_tc_loss, total_vae_tc_loss = 0, 0, 0, 0
+        for batch_idx, (data1, data2) in enumerate(tqdm(train_loader)):
 
-            data = data.to(torch.device("cuda")).float()
-            loss, recons_loss, prior_loss = self.step(data, train=True)
+            data1 = data1.to(torch.device("cuda")).float()
+            data2 = data2.to(torch.device("cuda")).float()
+
+            loss, recons_loss, kl_loss, tc_loss, vae_tc_loss = self.step(data1, data2, train=True)
             train_loss += loss
-            total_prior_loss += prior_loss
+            total_kl_loss += kl_loss
             total_recons_loss += recons_loss
+            total_tc_loss += tc_loss
+            total_vae_tc_loss += vae_tc_loss
 
             if (batch_idx+1) % self.log_interval == 0:
                 logging_func('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
@@ -115,7 +131,7 @@ class VariationalBaseModel():
         logging_func('====> Epoch: {} Average loss: {:.4f}'.format(
               epoch, train_loss / len(train_loader.dataset)))
         
-        return total_recons_loss, total_prior_loss
+        return total_recons_loss, total_kl_loss, total_tc_loss, total_vae_tc_loss
         
         
     # Returns the VLB for the test set
@@ -193,16 +209,21 @@ class VariationalBaseModel():
         # logging_func(f'Training {name} model...')
         writer = SummaryWriter(f'{logs_path}/{run_name}')
         for epoch in range(start_epoch, start_epoch + epochs):
-            total_recons_loss, total_prior_loss = self.train(train_loader, epoch, logging_func)
+            total_recons_loss, total_kl_loss, total_tc_loss, total_vae_tc_loss = self.train(train_loader, epoch, logging_func)
             # test_loss = self.test(test_loader, epoch, logging_func)
             total_recons_loss /= len(train_loader)
-            total_prior_loss /= len(train_loader)
+            total_kl_loss /= len(train_loader)
+            total_tc_loss /= len(train_loader)
+            total_vae_tc_loss /= len(train_loader)
             # logger.scalar_summary(train_loss, test_loss, epoch)
             # logger.write_log(total_recons_loss, total_prior_loss, epoch)
             print('recons loss epoch_{}: {}'.format(epoch, total_recons_loss ))
-            print('prior loss epoch_{}: {}'.format(epoch, total_prior_loss ))
+            print('KL loss epoch_{}: {}'.format(epoch, total_kl_loss ))
+            print('TC loss epoch_{}: {}'.format(epoch, total_tc_loss ))
+            print('VAE TC loss epoch_{}: {}'.format(epoch, total_vae_tc_loss ))
             writer.add_scalar('Loss\Reconstruction Loss', total_recons_loss, epoch)
-            writer.add_scalar('Loss\Prior Loss', total_prior_loss, epoch)
+            writer.add_scalar('Loss\KL Loss', total_kl_loss, epoch)
+            writer.add_scalar('Loss\TC Loss', total_tc_loss, epoch)
             # Optional update
             # self.update_()
             # For each report interval store model and save images
@@ -235,20 +256,18 @@ class VariationalBaseModel():
             os.mkdir(estimation_dir)
 
         with torch.no_grad():
-            data,_,_ = next(iter(test_loader))
-            shape = data.shape
+            data1, data2 = next(iter(test_loader))
+            # shape = data.shape
             # data = data.view(shape[0]*shape[1], shape[2], shape[3])
-            data = data.to(torch.device("cuda")).float()
-            recons_data0, recons_data, mu, logvar, logspike = self.model(data, train=False)
+            data1 = data1.to(torch.device("cuda")).float()
+            recons_data0, recons_data, mu, logvar, z = self.model(data1, train=False)
             
             for i in range(5):
 
                 original_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_original_mel_' +str(i)+'.png')
                 recons_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_recons_mel_' +str(i)+'.png')
                 recons_mel = recons_data[i]
-                origin_mel = data[i]
-                z_sample = self.model.reparameterize(mu[i], logvar[i], logspike[i])
-                z = mu[i]
+                origin_mel = data1[i]
 
                 plt.figure()
                 plt.title('reconstructed mel spectrogram')
@@ -261,9 +280,6 @@ class VariationalBaseModel():
                 librosa.display.specshow(origin_mel.cpu().detach().numpy(), x_axis='time', y_axis='mel', sr=16000)
                 plt.colorbar(format='%f')
                 plt.savefig(original_mel_fp)
-
-                encoding_visualization(z, estimation_dir, i, logging_epoch, prefix='')
-                encoding_visualization(z_sample, estimation_dir, i, logging_epoch, prefix='z_sample')
 
 
     def generate_wav(self, test_loader, ckp_path, generation_dir):
@@ -320,7 +336,7 @@ class VariationalBaseModel():
         epoch = self.load_last_model(ckp_path, logging_func=print)
         self.model.eval()
         if utterance == None:
-            batch_data = dataset.get_batch_utterances(speaker_id, 100)
+            batch_data,_ = dataset.get_batch_utterances(speaker_id, 100)
             batch_data =  batch_data.cuda().float()
         # else:
         #     batch_data,_,_ = dataset.get_batch_speaker(utterance)
@@ -330,17 +346,17 @@ class VariationalBaseModel():
             mel_spec = dataset.get_utterance(speaker_id,utterance)
             batch_data = chunking_mel(mel_spec).cuda().float()
 
-        _,_, mu, logvar, logspike = self.model(batch_data)
-        latent_vectors = self.model.reparameterize(mu, logvar, logspike)
+        _,_, mu, logvar, latent_vectors = self.model(batch_data)
+        # latent_vectors = self.model.reparameterize(mu, logvar)
         batch_idx = []
-        for idx in range(latent_vectors.shape[0]):
-            index = encoding_visualization(latent_vectors[idx,:], estimation_dir, idx, epoch,'')
-            batch_idx.append(index)
+        # for idx in range(latent_vectors.shape[0]):
+        #     index = encoding_visualization(latent_vectors[idx,:], estimation_dir, idx, epoch,'')
+        #     batch_idx.append(index)
         
-        print('mutal index: ', np.intersect1d(batch_idx[3], batch_idx[4],
-                                             batch_idx[5], batch_idx[6]))
+        # print('mutal index: ', np.intersect1d(batch_idx[3], batch_idx[4],
+        #                                      batch_idx[5], batch_idx[6]))
 
-        # plot_latentvt_analysis(latent_vectors, estimation_dir, speaker_id, threshold_mean=0.1, threshold_std=0.7)
+        plot_latentvt_analysis(latent_vectors, estimation_dir, speaker_id, threshold_mean=0.1, threshold_std=2.5)
 
     def voice_conversion(self, target_speaker, source_speaker,
                         utterance_id, dataset, ckp_path, generation_dir):
@@ -420,8 +436,10 @@ class VariationalBaseModel():
         vocoder_model = build_model().to(device)
         ckpt = torch.load('/home/ubuntu/checkpoint_step001000000_ema.pth')
         vocoder_model.load_state_dict(ckpt['state_dict'])
-        source_data = dataset.get_batch_utterances(source_speaker, 10).cuda().float()
-        target_data = dataset.get_batch_utterances(target_speaker, 10).cuda().float()
+        source_data,_ = dataset.get_batch_utterances(source_speaker, 40)
+        source_data = source_data.cuda().float()
+        target_data,_ = dataset.get_batch_utterances(target_speaker, 40)
+        target_data = target_data.cuda().float()
         utterance = dataset.get_utterance(source_speaker, utterance_id)
         utterance = chunking_mel(utterance).cuda().float()
 
@@ -429,33 +447,49 @@ class VariationalBaseModel():
             _,_, source_mu, source_logvar, source_logspike = self.model(source_data)
             _,_, target_mu, target_logvar, target_logspike = self.model(target_data)
 
-            source_z = self.model.reparameterize(source_mu, source_logvar, source_logspike)
-            target_z = self.model.reparameterize(target_mu, target_logvar, target_logspike)
+            source_z = self.model.reparameterize(source_mu, source_logvar)
+            target_z = self.model.reparameterize(target_mu, target_logvar)
             
             source_idx, source_mean, source_std = plot_latentvt_analysis(source_z,
-                                                                            generation_dir, source_speaker, 0.1, 0.6)
+                                                                            generation_dir, source_speaker, 0.1, 1.0)
             target_idx, target_mean, target_std = plot_latentvt_analysis(target_z,
-                                                                            generation_dir, target_speaker, 0.1, 0.6)
+                                                                            generation_dir, target_speaker, 0.1, 1.0)
             target_mean = torch.from_numpy(target_mean)
             source_mean = torch.from_numpy(source_mean)
-            mu, logvar, logspike = self.model.encode(utterance)
+            mu, logvar = self.model.encode(utterance)
 
-            mutual_idx = np.intersect1d(source_idx, target_idx)
+            # mutual_idx = np.intersect1d(source_idx, target_idx)
+            mutual_idx = [ 14]
 
-            z = self.model.reparameterize(mu, logvar, logspike)
+            z = self.model.reparameterize(mu, logvar)
+            # z = mu
             backup_z = z.clone()
-            print('target mean: ', target_mean)
+            
+            print('source mean: ', source_mean)
             print('target index: ', target_idx)
             print('source index: ', source_idx)
             print('mutual index: ', mutual_idx)
-
-            for j in range(mu.shape[0]):
-                for i, idx in enumerate(source_idx):
-                    z[j, idx] = 0
-
-            for j in range(mu.shape[0]):    
+            print('latent code z: ', backup_z)
+            # target_mean = target_mean.detach().cpu().numpy()
+            # target_mean = np.where(target_mean==mutual_idx)
+            print('target mean: ', target_mean)
+            # source_idx = [14]
+            # target_idx = [14]
+            # for j in range(z.shape[0]-1):
+            # # for j in range(1):
+            #     for i, idx in enumerate(target_idx):
+            #         z[j, idx] = 0
+            
+            # target_mean = [21]
+            # for j in range(1):
+            for j in range(z.shape[0]):    
                 for i, idx in enumerate(target_idx):
+                    # index = (target_mean == idx).nonzero()
+                    # print(index)
                     z[j,idx] = target_mean[i]
+                    # z[j, idx] = (z[j,idx] - source_mean[i])/ (source_logvar[i]*target_logvar[i] + target_mean[i])
+                    # z[j, idx] = (z[j,idx] - source_mean[i])
+            print(' converted latent code z: ', z)
 
             recons_mel = self.model.decode(backup_z)
             recons_voice = torch.cat([recons_mel[i] for i in range(recons_mel.shape[0])], 1)
@@ -516,16 +550,16 @@ class VariationalBaseModel():
         utterance_id = '100002'
 
         with torch.no_grad():
-            _,_, source_mu, source_logvar, source_logspike = self.model(source_mel)
-            _,_, target_mu, target_logvar, target_logspike = self.model(target_mel)
+            _,_, source_mu, source_logvar = self.model(source_mel)
+            _,_, target_mu, target_logvar = self.model(target_mel)
 
-            source_z = self.model.reparameterize(source_mu, source_logvar, source_logspike)
-            target_z = self.model.reparameterize(target_mu, target_logvar, target_logspike)
+            source_z = self.model.reparameterize(source_mu, source_logvar)
+            target_z = self.model.reparameterize(target_mu, target_logvar)
             
             mean_target_z = torch.mean(target_z, dim=0)
 
-            source_idx = feature_selection(fs_model, source_z)
-            target_idx = feature_selection(fs_model, target_z)
+            source_idx = [10, 14]
+            target_idx = [10, 14]
             print('source_idx: ', source_idx.shape)
             print('target idx: ', target_idx.shape)
             # print('mean target z: ', mean_target_z > 0.5)

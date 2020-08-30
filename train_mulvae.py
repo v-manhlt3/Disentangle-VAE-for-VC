@@ -1,7 +1,8 @@
 import torch
 import numpy as np 
 from sparse_encoding.conv_vae import ConvolutionalVSC
-# from sparse_encoding.conv_vae2 import ConvolutionalACVAE
+from sparse_encoding.conv_mulvae import ConvolutionalMulVAE
+from sparse_encoding.acvae import ConvolutionalACVAE
 import argparse, os
 from preprocessing.dataset_mel import SpeechDataset3, SpeechDataset2
 from torch.utils.data import DataLoader
@@ -10,7 +11,7 @@ from sparse_encoding.train_feature_selection import train_fs
 
 def get_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch-size', type=int, default=32, metavar='BS',
+    parser.add_argument('--batch-size', type=int, default=64, metavar='BS',
                         help='input batch size for training (default: 32)')
     # Hidden size for CelebA: 2000 dimensions, 2 layers
     parser.add_argument('--hidden-size', type=str, default='400', metavar='HS',
@@ -45,19 +46,19 @@ def get_dataset(dataset_fp, batch_size, num_utt, shuffle_dataset=True):
     
     # sample length for past experiments is 64
     dataset = SpeechDataset2(dataset_fp, samples_length=64)
-    train_size = int(0.97 * len(dataset))
-    test_size = len(dataset) - train_size
+    # train_size = int(1.0 * len(dataset))
+    # test_size = len(dataset) - train_size
 
-    print('Training dataset size: ', train_size)
-    print('Testing dataset size: ', test_size)
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    # print('Training dataset size: ', train_size)
+    # print('Testing dataset size: ', test_size)
+    # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size,
+    train_loader = DataLoader(dataset, batch_size=batch_size,
                              pin_memory=True, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             pin_memory=True, shuffle=True)
+    # test_loader = DataLoader(test_dataset, batch_size=batch_size,
+    #                          pin_memory=True, shuffle=True)
     
-    return train_loader, test_loader, dataset
+    return train_loader, dataset
 
 def train_feature_selection(vsc, dataloader, args):
 
@@ -72,23 +73,30 @@ if __name__=='__main__':
     parse.add_argument('--alpha', default=0.01, type=float, metavar='A') # alpha = 0.5 achieve quite good results
     parse.add_argument('--dataset_fp', default='/home/ubuntu/vcc2016_train', type=str)
     parse.add_argument('--log_dir', default='results', type=str)
+    # parse.add_argument('--gamma', default=6.4, type=float)
     args = parse.parse_args()
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
 
-    train_loader, test_loader, dataset = get_dataset(args.dataset_fp, batch_size=args.batch_size, num_utt=10)
+    train_loader, dataset = get_dataset(args.dataset_fp, batch_size=args.batch_size, num_utt=40)
 
-    vsc = ConvolutionalVSC(args.dataset, 64, 80,
+    ## MulVAEs using ACVAEs architecture
+    # vsc = ConvolutionalACVAE(args.dataset, 64, 80,
+    #                       args.latent_size, args.lr,
+    #                       args.alpha, args.log_interval, args.normalize,
+    #                       latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
+    ## MulVAEs using Autovc architecture
+    vsc = ConvolutionalMulVAE(args.dataset, 64, 80,
                           args.latent_size, args.lr,
                           args.alpha, args.log_interval, args.normalize,
                           latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
 
-    vsc.run_training(train_loader, test_loader, args.epochs,
-                    args.report_interval, args.sample_size, reload_model=True,
-                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
+    # vsc.run_training(train_loader, train_loader, args.epochs,
+    #                 args.report_interval, args.sample_size, reload_model=True,
+    #                 checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+    #                 logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
     # vsc.estimate_trained_model(test_loader)
     # vsc.generate_wav(test_loader, ckp_path='../'+args.log_dir+'/checkpoints',
@@ -97,13 +105,13 @@ if __name__=='__main__':
     # vsc.analyze_latent_code(speaker_id='VCTK-Corpus_wav16_p225', ckp_path='../'+args.log_dir+'/checkpoints',
     #                         estimation_dir='../'+args.log_dir+'/analysis', dataset=dataset, utterance='p225_019.npy')
 
-    # vsc.voice_conversion2(target_speaker='VCTK-Corpus_wav16_p248', source_speaker='VCTK-Corpus_wav16_p227',
+    # vsc.voice_conversion(target_speaker='VCTK-Corpus_wav16_p248', source_speaker='VCTK-Corpus_wav16_p227',
     #                     utterance_id='p227_045.npy', dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                     generation_dir='../'+args.log_dir+'/generation3')
+    #                     generation_dir='../'+args.log_dir+'/generation')
 
-    # vsc.voice_conversion2(target_speaker='vcc2016_training_SM1', source_speaker='vcc2016_training_SF2',
-    #                     utterance_id='100003.npy', dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                     generation_dir='../'+args.log_dir+'/generation3')
+    vsc.voice_conversion(target_speaker='vcc2016_training_SM1', source_speaker='vcc2016_training_SF2',
+                        utterance_id='100001.npy', dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
+                        generation_dir='../'+args.log_dir+'/generation')
 
     # target_utt = '/home/ubuntu/vcc2016_train/vcc2016_training_SM1/100025.npy'
     # source_utt = '/home/ubuntu/vcc2016_train/vcc2016_training_SF1/100002.npy'

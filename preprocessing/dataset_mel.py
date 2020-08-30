@@ -135,7 +135,8 @@ class SpeechDataset2(Dataset):
         # file_info = file_info.split('.')[0]
         # file_info = file_info.split('_')
         utterance_id = utterance.split('/')[-1].split('.')[0]
-        spk_id = utterance.split('/')[-2].split('_')[-1]
+        spk_id = utterance.split('/')[-2]
+        spk_id = self.speaker_ids.index(spk_id)
 
         return torch.from_numpy(mel_spec), utterance_id, spk_id
 
@@ -149,6 +150,7 @@ class SpeechDataset2(Dataset):
         utterances = []
         data = []
         speaker_ids = []
+        spk_id = self.speaker_ids.index(speaker_id)
         for i in range(num_utterances):
             # folder_path = os.path.join(self.file_path, speaker_id)
             rd_uttrance = np.random.choice(len(spk_utt), 1)[0]
@@ -167,11 +169,11 @@ class SpeechDataset2(Dataset):
 
             data.append(mel_spec)
             # utterances.append(utterance)
-            # speaker_ids.append(speaker_id)
+            speaker_ids.append(spk_id)
 
         data = torch.tensor(data)
-         
-        return data
+        speaker_ids = torch.tensor(speaker_ids)
+        return data, speaker_ids
 
     def get_batch_speaker(self, utterance): 
 
@@ -199,7 +201,7 @@ class SpeechDataset2(Dataset):
 
 ########## Dataset for loading mel from numpy file #####################################
 class SpeechDataset3(Dataset):
-    def __init__(self, file_path,sr=16000, samples_length=64, num_utterances=10, male_dataset=False):
+    def __init__(self, file_path,sr=16000, samples_length=64, num_utterances=40, male_dataset=False):
         self.file_path =file_path
         self.sr = sr
         self.samples_length = samples_length
@@ -240,42 +242,50 @@ class SpeechDataset3(Dataset):
             # print('spk id: ', speaker_id)
             data.append(mel_spec)
             utterances.append(utterance)
-            speaker_ids.append(speaker_id)
-        
+            speaker_ids.append(index)
         
         data = torch.tensor(data)
+        speaker_ids = torch.tensor(speaker_ids)
         # print('data shape: ', data.shape)
         return data, utterances, speaker_ids
 
 
-    def get_obama_samples(self):
-        speaker_id = 'VCTK-Corpus_wav16_obama'
+    def get_batch_utterances(self, speaker_id, num_utterances):
+
+        spk_utt = np.array(glob.glob(os.path.join(self.file_path, speaker_id, "*.npy")))
+        rnd_idx = np.random.choice(len(spk_utt), num_utterances)
         utterances = []
         data = []
-        speaker_ids = []
-        for i in range(self.num_utterances):
-            folder_path = os.path.join(self.file_path, speaker_id)
-            rd_uttrance = np.random.choice(len(self.utterance_ids[speaker_id]), 1)[0]
-            utterance = self.utterance_ids[speaker_id][rd_uttrance]
-            mel_spec = np.load(utterance)
+        spk_id = []
+        speaker_ids = self.speaker_ids.index(speaker_id)
+        for i in range(num_utterances):
+            # folder_path = os.path.join(self.file_path, speaker_id)
+            rd_uttrance = np.random.choice(len(spk_utt), 1)[0]
+            # utterance = self.utterance_ids[speaker_id][rd_uttrance]
+            mel_spec = np.load(spk_utt[rd_uttrance])
 
             if mel_spec.shape[1] <= self.samples_length:
                 while mel_spec.shape[1] < self.samples_length:
 
-                    rd_uttrance = np.random.choice(len(self.utterance_ids[speaker_id]), 1)[0]
-                    utterance = self.utterance_ids[speaker_id][rd_uttrance]
-                    mel_spec = np.load(utterance)
+                    rd_uttrance = np.random.choice(len(spk_utt), 1)[0]
+                    # utterance = self.utterance_ids[speaker_id][rd_uttrance]
+                    mel_spec = np.load(spk_utt[rd_uttrance])
 
             rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
             mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
 
             data.append(mel_spec)
-            utterances.append(utterance)
-            speaker_ids.append(speaker_id)
+            spk_id.append(speaker_ids)
 
         data = torch.tensor(data)
-         
-        return data, utterances, speaker_ids
+        spk_id = torch.tensor(spk_id)
+        return data, spk_id
+
+    def get_utterance(self, speaker, utterance):
+
+        fp = os.path.join(self.file_path, speaker, utterance)
+        mel_spec = np.load(fp)
+        return mel_spec
 
     def __len__(self):
         return len(self.speaker_ids)
@@ -369,10 +379,109 @@ class SpeechDataset4(Dataset):
 
     def __len__(self):
         return len(self.speaker_ids)
- 
+###############################################################################################################
+class SpeechDatasetFVAE(Dataset):
+    def __init__(self, file_path,sr=16000, samples_length=64):
+        self.file_path =file_path
+        self.sr = sr
+        self.samples_length = samples_length
+        # self.num_utterances = num_utterances
+
+        self.speaker_ids = [f for f in os.listdir(self.file_path)]
+        self.utterance_fp = np.array([])
+        for speaker in self.speaker_ids:
+            # print(speaker)
+            spk_utt = np.array(glob.glob(os.path.join(self.file_path,speaker, "*.npy")))
+            self.utterance_fp = np.concatenate((self.utterance_fp, spk_utt), axis=None)
+
+    def __getitem__(self, index):
+
+        utterance = self.utterance_fp[index]
+        utt2_idx = np.random.choice(len(self.utterance_fp), 1)[0]
+        utterance2 = self.utterance_fp[utt2_idx]
+
+        mel_spec = np.load(utterance)
+        np.transpose(mel_spec, (-1, -2))
+        mel_spec2 = np.load(utterance2)
+        np.transpose(mel_spec2, (-1, -2))
+
+        if mel_spec.shape[1] < self.samples_length:
+            mel_spec = np.pad(mel_spec, ((0,0),(0,self.samples_length-mel_spec.shape[1])), 'constant', constant_values=0)
+
+        else:
+            rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
+            mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
+
+        if mel_spec2.shape[1] < self.samples_length:
+            mel_spec2 = np.pad(mel_spec2, ((0,0),(0,self.samples_length-mel_spec2.shape[1])), 'constant', constant_values=0)
+
+        else:
+            rd_begin = np.random.choice((mel_spec2.shape[1] - self.samples_length), 1)[0]
+            mel_spec2 = mel_spec2[:,rd_begin:rd_begin + self.samples_length]
 
 
-##############################################################################################
+        return torch.from_numpy(mel_spec), torch.from_numpy(mel_spec2)
+
+    def __len__(self):
+        return len(self.utterance_fp)
+
+    def get_batch_utterances(self, speaker_id, num_utterances):
+
+        spk_utt = np.array(glob.glob(os.path.join(self.file_path, speaker_id, "*.npy")))
+        rnd_idx = np.random.choice(len(spk_utt), num_utterances)
+        utterances = []
+        data = []
+        speaker_ids = []
+        spk_id = self.speaker_ids.index(speaker_id)
+        for i in range(num_utterances):
+            # folder_path = os.path.join(self.file_path, speaker_id)
+            rd_uttrance = np.random.choice(len(spk_utt), 1)[0]
+            # utterance = self.utterance_ids[speaker_id][rd_uttrance]
+            mel_spec = np.load(spk_utt[rd_uttrance])
+
+            if mel_spec.shape[1] <= self.samples_length:
+                while mel_spec.shape[1] < self.samples_length:
+
+                    rd_uttrance = np.random.choice(len(spk_utt), 1)[0]
+                    # utterance = self.utterance_ids[speaker_id][rd_uttrance]
+                    mel_spec = np.load(spk_utt[rd_uttrance])
+
+            rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
+            mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
+
+            data.append(mel_spec)
+            # utterances.append(utterance)
+            speaker_ids.append(spk_id)
+
+        data = torch.tensor(data)
+        speaker_ids = torch.tensor(speaker_ids)
+        return data, speaker_ids
+
+    def get_batch_speaker(self, utterance): 
+
+        data = []
+        speaker_id = []
+        utt = []
+        for spk in self.speaker_ids:
+            mel_spec = np.load(os.path.join(self.file_path, spk, utterance))
+            print('mel shape: ', mel_spec.shape[1])
+            rd_begin = np.random.choice((mel_spec.shape[1] - self.samples_length), 1)[0]
+            mel_spec = mel_spec[:,rd_begin:rd_begin + self.samples_length]
+
+            data.append(mel_spec)
+            speaker_id.append(spk)
+            utt.append(utterance)
+
+        data = torch.tensor(data)
+        return data, utt, speaker_id
+    
+    def get_utterance(self, speaker, utterance):
+
+        fp = os.path.join(self.file_path, speaker, utterance)
+        mel_spec = np.load(fp)
+        return mel_spec
+
+###############################################################################################################
 @timing
 def load_batch(loader):
     return next(iter(loader))
