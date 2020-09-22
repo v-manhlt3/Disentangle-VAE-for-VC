@@ -231,7 +231,7 @@ class VariationalBaseModel():
                 with torch.no_grad():
                     torch.save(self.model.state_dict(), 
                                f'{checkpoints_path}/{run_name}_{epoch}.pth')
-                    self.estimate_trained_model(test_loader, checkpoints_path, estimation_dir)
+                    # self.estimate_trained_model(test_loader, checkpoints_path, estimation_dir)
 
     def estimate_trained_model(self, test_loader, checkpoints_path, estimation_dir):
 

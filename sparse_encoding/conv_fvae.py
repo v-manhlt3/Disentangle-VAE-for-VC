@@ -123,9 +123,9 @@ class FVAE(nn.Module):
         self.enc_modules = []
         for i in range(3):
             conv_layer = nn.Sequential(
-                ConvNorm(80 if i==0 else 512,
+                ConvNorm(36 if i==0 else 512,
                         512,
-                        kernel_size=5, stride=1,
+                        kernel_size=5, stride=2,
                         padding=2,
                         dilation=1, w_init_gain='relu'),
                 nn.BatchNorm1d(512)
@@ -133,30 +133,47 @@ class FVAE(nn.Module):
             self.enc_modules.append(conv_layer)
         self.enc_modules = nn.ModuleList(self.enc_modules)
         self.enc_lstm = nn.LSTM(dim_pre, dim_neck, 2, batch_first=True, bidirectional=True)
-        self.enc_linear = LinearNorm(8192, 512)
+
+        ################ mel-spectrogram#########################################
+        # self.enc_linear = LinearNorm(8192, 512)
+
+        # self.mu = LinearNorm(512, latent_dim) # length=64, 8192
+        # self.logvar = LinearNorm(512, latent_dim)
+        #########################################################################
+        self.enc_linear = LinearNorm(4096, 512)
 
         self.mu = LinearNorm(512, latent_dim) # length=64, 8192
         self.logvar = LinearNorm(512, latent_dim)
 
         ############################ Decoder Architecture ####################
         self.dec_pre_linear1 = LinearNorm(latent_dim, 512)
-        self.dec_pre_linear2 = LinearNorm(512, 8192)
+        self.dec_pre_linear2 = LinearNorm(512, 4096)
         self.dec_lstm1 = nn.LSTM(dim_neck*2, 512, 1, batch_first=True)
         self.dec_modules = []
 
         for i in range(3):
-            dec_conv_layer =  nn.Sequential(
-                ConvNorm(dim_pre,
-                        dim_pre,
-                        kernel_size=5, stride=1,
-                        padding=2, dilation=1, w_init_gain='relu'),
-                nn.BatchNorm1d(dim_pre)
-            )
-            self.dec_modules.append(dec_conv_layer)
+            if i<2:
+                dec_conv_layer =  nn.Sequential(
+                    nn.ConvTranspose1d(dim_pre,
+                            dim_pre,
+                            kernel_size=5, stride=2,
+                            padding=1, dilation=1),
+                    nn.BatchNorm1d(dim_pre)
+                )
+                self.dec_modules.append(dec_conv_layer)
+            else:
+                dec_conv_layer =  nn.Sequential(
+                    nn.ConvTranspose1d(dim_pre,
+                            dim_pre,
+                            kernel_size=5, stride=2,
+                            padding=2, dilation=1),
+                    nn.BatchNorm1d(dim_pre)
+                )
+                self.dec_modules.append(dec_conv_layer)
         self.dec_modules = nn.ModuleList(self.dec_modules)
 
         self.dec_lstm2 = nn.LSTM(dim_pre, 1024, 2, batch_first=True)
-        self.dec_linear2 = LinearNorm(1024, 80)
+        self.dec_linear2 = LinearNorm(1024, 36)
         self.apply(init_weights)
     
 
@@ -204,8 +221,8 @@ class FVAE(nn.Module):
         output = output.transpose(-1, -2)
         # print('-------------- output lstm shape2: ', output.shape)
         output,_ = self.dec_lstm2(output)
-        output = F.relu(self.dec_linear2(output))
-        return output.transpose(-1, -2)
+        output = self.dec_linear2(output)
+        return output.transpose(-1, -2)[:,:,:256]
 
     def forward(self, x, train=True):
         mu, logvar  = self.encode(x)
@@ -216,7 +233,8 @@ class FVAE(nn.Module):
             z = mu
 
         x_hat0 = self.decode(z)
-        x_hat = x_hat0 + self.postnet(x_hat0)
+        # x_hat = x_hat0 + self.postnet(x_hat0)
+        x_hat = x_hat0
         return x_hat0, x_hat, mu, logvar, z
 
     def update_c(self):
@@ -344,8 +362,8 @@ class ConvolutionalFVAE(VariationalBaseModel):
 
         
         
-
-        LOSS = MSE0 + MSE + self.model._beta*kl_loss - self.gamma*vae_tc_loss
+        LOSS = 10*MSE0 + self.model._beta*kl_loss - self.gamma*vae_tc_loss
+        # LOSS = 10*MSE0 + 10*MSE + self.model._beta*kl_loss - self.gamma*vae_tc_loss
         
         return LOSS, MSE0,MSE, kl_loss, vae_tc_loss
 

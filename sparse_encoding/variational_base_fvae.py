@@ -109,7 +109,7 @@ class VariationalBaseModel():
         self.model.train()
         train_loss = 0
         total_recons_loss, total_kl_loss, total_tc_loss, total_vae_tc_loss = 0, 0, 0, 0
-        for batch_idx, (data1, data2) in enumerate(tqdm(train_loader)):
+        for batch_idx, (data1, data2,_) in enumerate(tqdm(train_loader)):
 
             data1 = data1.to(torch.device("cuda")).float()
             data2 = data2.to(torch.device("cuda")).float()
@@ -121,12 +121,12 @@ class VariationalBaseModel():
             total_tc_loss += tc_loss
             total_vae_tc_loss += vae_tc_loss
 
-            if (batch_idx+1) % self.log_interval == 0:
-                logging_func('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
-                      .format(epoch, batch_idx * len(data), 
-                              len(train_loader.dataset),
-                              100. * batch_idx / len(train_loader),
-                              loss / len(data)))
+            # if (batch_idx+1) % self.log_interval == 0:
+            #     logging_func('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
+            #           .format(epoch, batch_idx * len(data), 
+            #                   len(train_loader.dataset),
+            #                   100. * batch_idx / len(train_loader),
+            #                   loss / len(data1)))
 
         logging_func('====> Epoch: {} Average loss: {:.4f}'.format(
               epoch, train_loss / len(train_loader.dataset)))
@@ -256,7 +256,7 @@ class VariationalBaseModel():
             os.mkdir(estimation_dir)
 
         with torch.no_grad():
-            data1, data2 = next(iter(test_loader))
+            data1, data2,_ = next(iter(test_loader))
             # shape = data.shape
             # data = data.view(shape[0]*shape[1], shape[2], shape[3])
             data1 = data1.to(torch.device("cuda")).float()
@@ -338,13 +338,13 @@ class VariationalBaseModel():
         if utterance == None:
             batch_data,_ = dataset.get_batch_utterances(speaker_id, 100)
             batch_data =  batch_data.cuda().float()
-        # else:
-        #     batch_data,_,_ = dataset.get_batch_speaker(utterance)
-        #     batch_data =  batch_data.cuda().float()
-        #     speaker_id = 'analysi_utt' + utterance.split('.')[0]
         else:
-            mel_spec = dataset.get_utterance(speaker_id,utterance)
-            batch_data = chunking_mel(mel_spec).cuda().float()
+            batch_data,_,_ = dataset.get_batch_speaker(utterance)
+            batch_data =  batch_data.cuda().float()
+            speaker_id = 'analysi_utt' + utterance.split('.')[0]
+        # else:
+        #     mel_spec = dataset.get_utterance(speaker_id,utterance)
+        #     batch_data = chunking_mel(mel_spec).cuda().float()
 
         _,_, mu, logvar, latent_vectors = self.model(batch_data)
         # latent_vectors = self.model.reparameterize(mu, logvar)
@@ -388,6 +388,8 @@ class VariationalBaseModel():
             print('target index: ', len(target_idx))
             print('source index: ', len(source_idx))
 
+            source_idx = [10]
+            source_mean = [20]
             for j in range(mu.shape[0]):
                 for i, idx in enumerate(source_idx):
                     mu[j, idx] = 0

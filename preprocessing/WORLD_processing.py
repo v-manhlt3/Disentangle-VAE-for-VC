@@ -119,7 +119,8 @@ def world_synthesis_data(f0s, decoded_sps, aps, fs, frame_period):
 
 def mcs_normalization_fit_transoform(mcs):
 
-    mcs_concatenated = np.concatenate(mcs, axis = 1)
+    # mcs_concatenated = np.concatenate(mcs, axis = 1)
+    mcs_concatenated = mcs
     mcs_mean = np.mean(mcs_concatenated, axis = 1, keepdims = True)
     mcs_std = np.std(mcs_concatenated, axis = 1, keepdims = True)
 
@@ -212,13 +213,14 @@ def wavs_to_mfccs(wavs, sr, n_fft = 1024, hop_length = None, n_mels = 128, n_mfc
 
 def mfccs_normalization(mfccs):
 
-    mfccs_concatenated = np.concatenate(mfccs, axis = 1)
+    # mfccs_concatenated = np.concatenate(mfccs, axis = 1)
+    mfccs_concatenated = mfccs
     mfccs_mean = np.mean(mfccs_concatenated, axis = 1, keepdims = True)
     mfccs_std = np.std(mfccs_concatenated, axis = 1, keepdims = True)
-
-    mfccs_normalized = list()
-    for mfcc in mfccs:
-        mfccs_normalized.append((mfcc - mfccs_mean) / mfccs_std)
+    mfccs_normalized = (mfccs -mfccs_mean) /  mfccs_std
+    # mfccs_normalized = list()
+    # for mfcc in mfccs:
+    #     mfccs_normalized.append((mfcc - mfccs_mean) / mfccs_std)
     
     return mfccs_normalized, mfccs_mean, mfccs_std
 
@@ -295,3 +297,82 @@ def preprocess_voice(data_dir, name, sampling_rate = 16000, num_mcep = 36, frame
     print('Preprocessing Done.')
 
     print('Time Elapsed for Data Preprocessing: %02d:%02d:%02d' % (time_elapsed // 3600, (time_elapsed % 3600 // 60), (time_elapsed % 60 // 1)))
+
+
+if __name__=='__main__':
+    import argparse, os
+    from glob import glob
+    from tqdm import tqdm
+    import librosa.display
+    import matplotlib.pyplot as plt
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset_fp', default='/home/ubunt/vcc2016_train/', type=str)
+    parser.add_argument('--out_dir', default='/home/ubuntu/', type=str)
+    parser.add_argument('--stat_fp', default='/home/ubuntu/vcc2018_stat_data/', type=str)
+    args = parser.parse_args()
+    # SR = 22050
+    SR =16000
+    dataset_fp = args.dataset_fp
+
+    speaker_ids = [spk for spk in os.listdir(dataset_fp)]
+    for spk in speaker_ids:
+        if not os.path.exists(os.path.join(args.out_dir, spk)):
+            os.mkdir(os.path.join(args.out_dir, spk))
+        utterances =  glob(os.path.join(dataset_fp, spk, "*.wav"))
+        logf0 = np.load(args.stat_fp + 'log_f0_' + str(spk) + '.npz')
+        mcep = np.load(args.stat_fp + 'mcep_' + str(spk) + '.npz')
+        print('preprocessing speaker: ', spk)
+        for utt in tqdm(utterances):
+            
+            output_fn = utt.replace('wav', 'npz').split('/')[-1]
+            output_fp = os.path.join(args.out_dir, spk, output_fn)
+            wav, sr = librosa.load(utt, sr=SR)
+            wav = librosa.util.normalize(wav)
+
+            
+
+            f0, timeaxis, sp, ap, mcc = world_encode_data(wav=wav, fs=SR)
+
+            mc_mean = mcep['mean'].T
+            mc_mean = np.repeat(mc_mean, mcc.shape[0], axis=1)
+            mc_std = mcep['std'].T
+            mc_std = np.repeat(mc_std, mcc.shape[0], axis=1)
+
+            normalized_mc = (mcc - mc_mean) /  mc_std
+            # normalized_mc, mc_mean, mc_std = mfccs_normalization(mcc)
+            # print('mc_mean shape: ', mcep['mean'].shape)
+            # print('mcc shape: ', mcc.shape)
+            np.savez(output_fp, f0=f0, sp=sp, ap=ap, mcc=mcc, normalized_mc=normalized_mc, mc_mean=mcep['mean'].T, mc_std=mcep['std'].T)
+
+    # wav, sr = librosa.load('/home/ubuntu/vcc2016_training/SF1/100001.wav', sr=16000)
+    # f0s, timeaxes, sps, aps, mcs = world_encode_data(wav = wav, fs = 16000)
+
+    # normalized_mc, mc_mean, mc_std = mfccs_normalization(mcs)
+
+    # plt.figure()
+    # librosa.display.specshow(mcs.T, x_axis='time', y_axis='mel', sr=16000)
+    # plt.colorbar()
+    # plt.title('origin_MFCC')
+    # plt.tight_layout()
+
+    # plt.savefig('../origin_mfccs.png')
+
+
+    # plt.figure()
+    # librosa.display.specshow(normalized_mc.T, x_axis='time', y_axis='mel', sr=16000)
+    # plt.colorbar()
+    # plt.title('MFCC')
+    # plt.tight_layout()
+
+    # plt.savefig('../mfccs.png')
+
+    # mc_partition = mcs[:10,:]
+    # mc_norm, mc_mean, mc_std = mfccs_normalization(mc_partition)
+    # print('mcs shape: ', mcs.shape)
+    # print('mc_norm: ', mc_norm.shape)
+    # print('mc mean', mc_mean.shape)
+
+    # data = np.load('/home/ubuntu/vcc2016_WORLD_dataset/SF1/100001.npz')
+    # mc = data['normalized_mc']
+    # mc_mean = data['mc_mean']
+    # print('mc shape: ', mc_mean.shape)

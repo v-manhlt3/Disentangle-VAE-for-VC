@@ -29,6 +29,8 @@ def plot_latentvt_analysis(latent_vectors, estimation_dir, speaker_id,
     mean = np.mean(latent_vectors, axis=0)
     std = np.std(latent_vectors, axis=0)
     idx = np.arange(mean.shape[0])
+    # print('std for latent dimension: ', std)
+    # print('mean for latent dimension: ', mean)
     
 
     threshold_mean_idx = np.where(np.abs(mean) < threshold_mean)[0]
@@ -37,8 +39,8 @@ def plot_latentvt_analysis(latent_vectors, estimation_dir, speaker_id,
     threshold_idx = np.unique(threshold_idx)
 
     idx = np.delete(idx, threshold_idx, axis=0)
-    print('mean shape: ', mean.shape)
-    print('std shape: ', std.shape)
+    # print('mean shape: ', mean.shape)
+    # print('std shape: ', std.shape)
     mean_vector = np.savez(os.path.join(estimation_dir, speaker_id+'_analysis'), mean=mean, std=std, index=idx)
 
     mean = np.delete(mean, threshold_idx, axis=0)

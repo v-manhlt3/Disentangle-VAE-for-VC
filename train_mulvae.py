@@ -4,7 +4,7 @@ from sparse_encoding.conv_vae import ConvolutionalVSC
 from sparse_encoding.conv_mulvae import ConvolutionalMulVAE
 from sparse_encoding.acvae import ConvolutionalACVAE
 import argparse, os
-from preprocessing.dataset_mel import SpeechDataset3, SpeechDataset2
+from preprocessing.dataset_mel import SpeechDataset3, SpeechDataset2, SpeechDatasetMCC
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from sparse_encoding.train_feature_selection import train_fs
@@ -45,7 +45,7 @@ def get_parse():
 def get_dataset(dataset_fp, batch_size, num_utt, shuffle_dataset=True):
     
     # sample length for past experiments is 64
-    dataset = SpeechDataset2(dataset_fp, samples_length=64)
+    dataset = SpeechDatasetMCC(dataset_fp, samples_length=256)
     # train_size = int(1.0 * len(dataset))
     # test_size = len(dataset) - train_size
 
@@ -83,15 +83,15 @@ if __name__=='__main__':
     train_loader, dataset = get_dataset(args.dataset_fp, batch_size=args.batch_size, num_utt=40)
 
     ## MulVAEs using ACVAEs architecture
-    # vsc = ConvolutionalACVAE(args.dataset, 64, 80,
-    #                       args.latent_size, args.lr,
-    #                       args.alpha, args.log_interval, args.normalize,
-    #                       latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
-    ## MulVAEs using Autovc architecture
-    vsc = ConvolutionalMulVAE(args.dataset, 64, 80,
+    vsc = ConvolutionalACVAE(args.dataset, 64, 80,
                           args.latent_size, args.lr,
                           args.alpha, args.log_interval, args.normalize,
                           latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
+    ## MulVAEs using Autovc architecture
+    # vsc = ConvolutionalMulVAE(args.dataset, 64, 80,
+    #                       args.latent_size, args.lr,
+    #                       args.alpha, args.log_interval, args.normalize,
+    #                       latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
 
     # vsc.run_training(train_loader, train_loader, args.epochs,
     #                 args.report_interval, args.sample_size, reload_model=True,
@@ -109,8 +109,8 @@ if __name__=='__main__':
     #                     utterance_id='p227_045.npy', dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
     #                     generation_dir='../'+args.log_dir+'/generation')
 
-    vsc.voice_conversion(target_speaker='vcc2016_training_SM1', source_speaker='vcc2016_training_SF2',
-                        utterance_id='100001.npy', dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
+    vsc.voice_conversion2(target_speaker='vcc2016_training_SM1', source_speaker='vcc2016_training_SF2',
+                        source_utt='100001.npy', target_utt='100002.npy',dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
                         generation_dir='../'+args.log_dir+'/generation')
 
     # target_utt = '/home/ubuntu/vcc2016_train/vcc2016_training_SM1/100025.npy'
