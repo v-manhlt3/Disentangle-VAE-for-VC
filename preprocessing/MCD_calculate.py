@@ -55,7 +55,7 @@ def evaluate_mcd(source_spk, target_spk, file_path1, file_path2):
 def evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2):
 
     MCD_array = []
-    utt_list = [utt for utt in os.listdir(os.path.join(file_path1, target_spk))]
+    utt_list = [utt for utt in os.listdir(os.path.join(file_path2, source_spk))]
     print('utt list: ', utt_list)
     print('sorted utt list: ', sorted(utt_list))
     for utt in utt_list:
@@ -96,11 +96,12 @@ if __name__ =='__main__':
     source_spk = 'VCC2SM1_to_VCC2SF1'
     # source_spk = 'VCC2SF1'
     target_spk = 'VCC2SF1'
-    # file_path1 = '/home/ubuntu/vcc2018_training/'
     file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
+    # file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
     # convert fp
-    file_path2 = '/vinai/manhlt/icassp-20/icassp-20/VC_logs3/VCC2018_gvae_mcc_32_beta0.1/evaluation/mcep/'
+    # file_path2 = '/vinai/manhlt/icassp-20/icassp-20/baseline_VC/StarGAN-Voice-Conversion-2/Stargan_log/sample_dir'
     # file_path2 = '/home/ubuntu/ACVAE_VC/'
+    file_path2 = '/vinai/manhlt/icassp-20/icassp-20/VC_logs3/VCC2018_gvae_mcc_32_128_beta0.1/evaluation/mcep'
 
     MCD_arr = evaluate_mcd(source_spk, target_spk, file_path1, file_path2)
 

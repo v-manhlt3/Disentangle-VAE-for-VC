@@ -101,10 +101,10 @@ if __name__=='__main__':
                           mse_cof=args.mse_cof, kl_cof=args.kl_cof, style_cof=args.style_cof)
     
 
-    vsc.run_training(train_loader, train_loader, args.epochs,
-                    args.report_interval, args.sample_size, reload_model=True,
-                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
+    # vsc.run_training(train_loader, train_loader, args.epochs,
+    #                 args.report_interval, args.sample_size, reload_model=True,
+    #                 checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+    #                 logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
     # vsc.estimate_trained_model(test_loader)
     # vsc.generate_wav(test_loader, ckp_path='../'+args.log_dir+'/checkpoints',
@@ -137,5 +137,5 @@ if __name__=='__main__':
     # vsc.load_last_model(checkpoints_path='../'+args.log_dir+'/checkpoints')
     # train_feature_selection(vsc, train_loader, args)
 
-    # vsc.vc_evaluation('VCC2SM1', 'VCC2SF1', evaluation_fp='../'+args.log_dir+'/evaluation',
-    #                  ckp_path='../'+args.log_dir+'/checkpoints',dataset_fp=args.dataset_fp)
+    vsc.vc_evaluation('VCC2SM1', 'VCC2SF1', evaluation_fp='../'+args.log_dir+'/evaluation',
+                     ckp_path='../'+args.log_dir+'/checkpoints',dataset_fp=args.dataset_fp)

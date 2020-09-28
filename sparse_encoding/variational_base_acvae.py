@@ -57,17 +57,17 @@ class VariationalBaseModelGVAE():
         if train:
             self.optimizer.zero_grad()
         
-        recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
-        self.model(data1, data2)
-
-        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
         # self.model(data1, data2)
 
-        loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        self.loss_functionGVAE(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+        recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        self.model(data1, data2)
 
         # loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        # self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
+        # self.loss_functionGVAE(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+
+        loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
+        self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
         if train:
             loss.backward()
             self.optimizer.step()
@@ -192,7 +192,7 @@ class VariationalBaseModelGVAE():
 
     def load_model(self, checkpoints_path, epoch,logging_func=print):
         name = self.model.__class__.__name__
-        model_name = 'MulVAE_mnist_1_2000000000000_32_0-0001_' + str(epoch) +'.pth'
+        model_name = 'MulVAE_mnist_1701_200000000000000000_32_0-0001_' + str(epoch) +'.pth'
         last_checkpoint = os.path.join(checkpoints_path, model_name)
         # logging_func('Last checkpoint: ', last_checkpoint)
         self.model.load_state_dict(torch.load(last_checkpoint))
@@ -462,8 +462,8 @@ class VariationalBaseModelGVAE():
             os.mkdir(os.path.join(evaluation_fp, 'mcep',source_speaker + '_to_'+target_speaker))
         fp2 = os.path.join(evaluation_fp, 'mcep',source_speaker + '_to_'+target_speaker)
 
-        epoch = self.load_last_model(ckp_path, logging_func=print)
-        # epoch = self.load_model(ckp_path, 900, logging_func=print)
+        # epoch = self.load_last_model(ckp_path, logging_func=print)
+        epoch = self.load_model(ckp_path, 9900, logging_func=print)
         self.model.eval()
 
         source_utt_fp = glob(os.path.join(dataset_fp, source_speaker, '*.npz'))
@@ -503,6 +503,7 @@ class VariationalBaseModelGVAE():
             voice_length = src_mcc.shape[0]
             src_ap = utt1['ap']
             src_f0 = utt1['f0']
+            src_sp = utt1['sp']
             utt_id = utt_fp.split('/')[-1].split('.')[0]
             # print(utt_id)
             # print(src_mcc.shape)
@@ -522,13 +523,14 @@ class VariationalBaseModelGVAE():
             cvt_mcc = self.model.decode(convert_z)
             cvt_voice_mcc = torch.cat([cvt_mcc[i] for i in range(cvt_mcc.shape[0])], 1)
             cvt_voice_mcc = cvt_voice_mcc.cpu().detach().numpy()
-            cvt_voice_mcc = cvt_voice_mcc.T
+            cvt_voice_mcc = cvt_voice_mcc.T.astype(np.double)
+            # cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]
 
             cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]*src_mcep_std + src_mcep_mean
 
             cvt_sp = world_decode_mc(np.ascontiguousarray(cvt_voice_mcc), SR)
             converted_f0 = pitch_conversion(f0=src_f0, mean_log_src=src_logf0_mean, std_log_src=src_logf0_std,mean_log_target=trg_logf0_mean, std_log_target=trg_logf0_std)
-            cvt_wav = world_speech_synthesis(f0=src_f0, sp=cvt_sp, ap=src_ap, frame_period=5, fs=SR)
+            cvt_wav = world_speech_synthesis(f0=converted_f0, sp=cvt_sp, ap=src_ap, frame_period=5, fs=SR)
             wav_fp = os.path.join(fp1, str(utt_id)+'.wav')
             mcep_fp = os.path.join(fp2, str(utt_id) + '.npz')
 

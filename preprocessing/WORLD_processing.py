@@ -306,8 +306,8 @@ if __name__=='__main__':
     import librosa.display
     import matplotlib.pyplot as plt
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_fp', default='/home/ubunt/vcc2016_train/', type=str)
-    parser.add_argument('--out_dir', default='/home/ubuntu/', type=str)
+    parser.add_argument('--dataset_fp', default='/home/ubuntu/vcc2018_training/', type=str)
+    parser.add_argument('--out_dir', default='/home/ubuntu/vcc2018_WORLD_dataset_norm', type=str)
     parser.add_argument('--stat_fp', default='/home/ubuntu/vcc2018_stat_data/', type=str)
     args = parser.parse_args()
     # SR = 22050
@@ -315,64 +315,57 @@ if __name__=='__main__':
     dataset_fp = args.dataset_fp
 
     speaker_ids = [spk for spk in os.listdir(dataset_fp)]
-    for spk in speaker_ids:
-        if not os.path.exists(os.path.join(args.out_dir, spk)):
-            os.mkdir(os.path.join(args.out_dir, spk))
-        utterances =  glob(os.path.join(dataset_fp, spk, "*.wav"))
-        logf0 = np.load(args.stat_fp + 'log_f0_' + str(spk) + '.npz')
-        mcep = np.load(args.stat_fp + 'mcep_' + str(spk) + '.npz')
-        print('preprocessing speaker: ', spk)
-        for utt in tqdm(utterances):
+    # for spk in speaker_ids:
+    #     if not os.path.exists(os.path.join(args.out_dir, spk)):
+    #         os.mkdir(os.path.join(args.out_dir, spk))
+    #     utterances =  glob(os.path.join(dataset_fp, spk, "*.wav"))
+    #     logf0 = np.load(args.stat_fp + 'log_f0_' + str(spk) + '.npz')
+    #     mcep = np.load(args.stat_fp + 'mcep_' + str(spk) + '.npz')
+    #     print('preprocessing speaker: ', spk)
+    #     for utt in tqdm(utterances):
             
-            output_fn = utt.replace('wav', 'npz').split('/')[-1]
-            output_fp = os.path.join(args.out_dir, spk, output_fn)
-            wav, sr = librosa.load(utt, sr=SR)
-            wav = librosa.util.normalize(wav)
+    #         output_fn = utt.replace('wav', 'npz').split('/')[-1]
+    #         output_fp = os.path.join(args.out_dir, spk, output_fn)
+    #         wav, sr = librosa.load(utt, sr=SR)
+    #         wav = librosa.util.normalize(wav)
 
             
 
-            f0, timeaxis, sp, ap, mcc = world_encode_data(wav=wav, fs=SR)
+    #         f0, timeaxis, sp, ap, mcc = world_encode_data(wav=wav, fs=SR)
+    #         mcc_transposed = np.array(mcc).T
+    #         # print('mcc shape: ', mcc.shape)
+            
+    #         # mcc = mcc
 
-            mc_mean = mcep['mean'].T
-            mc_mean = np.repeat(mc_mean, mcc.shape[0], axis=1)
-            mc_std = mcep['std'].T
-            mc_std = np.repeat(mc_std, mcc.shape[0], axis=1)
+    #         mc_mean = mcep['mean']
+    #         # print('mcc mean: ', mc_mean.shape)
+    #         # mc_mean = np.repeat(mc_mean, mcc.shape[0], axis=1)
+    #         mc_std = mcep['std']
+    #         # mc_std = np.repeat(mc_std, mcc.shape[0], axis=1)
 
-            normalized_mc = (mcc - mc_mean) /  mc_std
-            # normalized_mc, mc_mean, mc_std = mfccs_normalization(mcc)
-            # print('mc_mean shape: ', mcep['mean'].shape)
-            # print('mcc shape: ', mcc.shape)
-            np.savez(output_fp, f0=f0, sp=sp, ap=ap, mcc=mcc, normalized_mc=normalized_mc, mc_mean=mcep['mean'].T, mc_std=mcep['std'].T)
+    #         normalized_mc = (mcc_transposed - mc_mean) /  mc_std
 
-    # wav, sr = librosa.load('/home/ubuntu/vcc2016_training/SF1/100001.wav', sr=16000)
-    # f0s, timeaxes, sps, aps, mcs = world_encode_data(wav = wav, fs = 16000)
+    #         np.savez(output_fp, f0=f0, sp=sp, ap=ap, mcc=mcc, normalized_mc=normalized_mc, mc_mean=mcep['mean'].T, mc_std=mcep['std'].T)
 
-    # normalized_mc, mc_mean, mc_std = mfccs_normalization(mcs)
+
+    # fp = '/home/ubuntu/vcc2018_WORLD_dataset_norm/VCC2TM2/10001.npz'
+    # data = np.load(fp)
+    # mcc_norm = data['normalized_mc']
+    # mcc = data['mcc']
 
     # plt.figure()
-    # librosa.display.specshow(mcs.T, x_axis='time', y_axis='mel', sr=16000)
+    # librosa.display.specshow(mcc_norm, x_axis='time', y_axis='mel', sr=16000)
     # plt.colorbar()
     # plt.title('origin_MFCC')
     # plt.tight_layout()
 
-    # plt.savefig('../origin_mfccs.png')
+    # plt.savefig('/home/ubuntu/mcc_normalization1.png')
 
 
     # plt.figure()
-    # librosa.display.specshow(normalized_mc.T, x_axis='time', y_axis='mel', sr=16000)
+    # librosa.display.specshow(mcc, x_axis='time', y_axis='mel', sr=16000)
     # plt.colorbar()
     # plt.title('MFCC')
     # plt.tight_layout()
 
-    # plt.savefig('../mfccs.png')
-
-    # mc_partition = mcs[:10,:]
-    # mc_norm, mc_mean, mc_std = mfccs_normalization(mc_partition)
-    # print('mcs shape: ', mcs.shape)
-    # print('mc_norm: ', mc_norm.shape)
-    # print('mc mean', mc_mean.shape)
-
-    # data = np.load('/home/ubuntu/vcc2016_WORLD_dataset/SF1/100001.npz')
-    # mc = data['normalized_mc']
-    # mc_mean = data['mc_mean']
-    # print('mc shape: ', mc_mean.shape)
+    # plt.savefig('/home/ubuntu/mfccs1.png')
