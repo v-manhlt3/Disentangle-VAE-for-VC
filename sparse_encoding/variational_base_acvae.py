@@ -57,17 +57,17 @@ class VariationalBaseModelGVAE():
         if train:
             self.optimizer.zero_grad()
         
-        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
-        # self.model(data1, data2)
-
-        recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
         self.model(data1, data2)
 
-        # loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        # self.loss_functionGVAE(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        # self.model(data1, data2)
 
         loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
+        self.loss_functionGVAE(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+
+        # loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
+        # self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
         if train:
             loss.backward()
             self.optimizer.step()

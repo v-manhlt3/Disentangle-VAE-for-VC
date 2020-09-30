@@ -76,7 +76,7 @@ class ConvNorm(torch.nn.Module):
 
 class MulVAE(nn.Module):
 
-    def __init__(self, input_sz = (1, 64, 80),
+    def __init__(self, speaker_size,input_sz = (1, 64, 80),
                 kernel_szs = [512,512,512],
                 hidden_sz: int = 256,
                 latent_sz: int = 32,
@@ -97,6 +97,7 @@ class MulVAE(nn.Module):
         self._beta_delta = beta_delta
         self.latent_dim = latent_dim
         self.dim_neck = dim_neck
+        self.speaker_size = speaker_size
         # self.mse_cof = mse_cof
         # self.kl_cof = kl_cof
         # self.style_cof = style_cof
@@ -174,11 +175,11 @@ class MulVAE(nn.Module):
         mu = self.mu(outputs)
         logvar = self.logvar(outputs)
 
-        style_mu = mu[:,:4]
-        style_logvar = logvar[:,:4]
+        style_mu = mu[:,:self.speaker_size]
+        style_logvar = logvar[:,:self.speaker_size]
 
-        content_mu = mu[:,4:]
-        content_logvar = logvar[:,4:] 
+        content_mu = mu[:,self.speaker_size:]
+        content_logvar = logvar[:,self.speaker_size:] 
         
         return style_mu, style_logvar, content_mu, content_logvar
 
@@ -258,8 +259,8 @@ class MulVAE(nn.Module):
 
         recons_x1 = self.decode(z1)
         recons_x2 = self.decode(z2)
-        # return recons_x1, recons_x2, content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
-        return recons_x1, recons_x2, q_z1_mu, q_z2_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1
+        return recons_x1, recons_x2, content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
+        # return recons_x1, recons_x2, q_z1_mu, q_z2_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1
 #######################################################################################
 
     def update_c(self):
@@ -271,7 +272,7 @@ class MulVAE(nn.Module):
 class ConvolutionalMulVAE(VariationalBaseModelGVAE):
     def __init__(self, dataset, width, height,
                 latent_sz, learning_rate, alpha,
-                log_interval, normalize, batch_size, channels=1, device=torch.device("cuda"),
+                log_interval, normalize, batch_size, speaker_size,channels=1, device=torch.device("cuda"),
                 latent_dim=256, beta=0.1, mse_cof=10, kl_cof=10, style_cof=0.1):
         super().__init__(dataset, width, height, channels,latent_sz, learning_rate,
                         device, log_interval, batch_size)
@@ -285,7 +286,7 @@ class ConvolutionalMulVAE(VariationalBaseModelGVAE):
         # self.hidden_sz = hidden_sz
         # self.kernel_szs = [int(ks) for ks in str(kernel_szs).split(',')]
 
-        self.model = MulVAE(latent_dim=self.latent_dim, beta=0.1, batch_size=batch_size).to(device)
+        self.model = MulVAE(latent_dim=self.latent_dim, beta=0.1, batch_size=batch_size, speaker_size=speaker_size).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.train_losses = []
         self.test_losses = []
@@ -331,11 +332,11 @@ class ConvolutionalMulVAE(VariationalBaseModelGVAE):
         
         with torch.autograd.set_detect_anomaly(True):
             # MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum').div(self.batch_size)
-            # MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='sum').div(self.batch_size)
-            # MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='sum').div(self.batch_size)
+            MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='sum').div(self.batch_size)
+            MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='sum').div(self.batch_size)
 
-            MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='mean')
-            MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='mean')
+            # MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='mean')
+            # MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='mean')
 
             z1_kl_loss = (-0.5)*torch.sum(1 + q_z1_logvar - q_z1_mu.pow(2) - q_z1_logvar.exp()).div(self.batch_size)
             z2_kl_loss = (-0.5)*torch.sum(1 + q_z2_logvar - q_z2_mu.pow(2) - q_z2_logvar.exp()).div(self.batch_size)

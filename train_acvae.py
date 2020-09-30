@@ -18,7 +18,9 @@ def get_parse():
     parser.add_argument('--hidden-size', type=str, default='400', metavar='HS',
                         help='hidden sizes, separated by commas (default: 400)')
     # Latent size for CelebA: 800 dimensions
-    parser.add_argument('--latent-size', type=int, default=64, metavar='LS',
+    parser.add_argument('--speaker_size', type=int, default=4, metavar='LS',
+                        help='number of latent dimensions (default: 200)')
+    parser.add_argument('--latent-size', type=int, default=32, metavar='LS',
                         help='number of latent dimensions (default: 200)')
     parser.add_argument('--lr', default=1e-3, type=float, metavar='LR', 
                         help='initial learning rate')
@@ -96,15 +98,15 @@ if __name__=='__main__':
 
     vsc = ConvolutionalMulVAE(args.dataset, 64, 80,
                           args.latent_size, args.lr,
-                          args.alpha, args.log_interval, args.normalize,
+                          args.alpha, args.log_interval, args.normalize, speaker_size=args.speaker_size,
                           latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size,
                           mse_cof=args.mse_cof, kl_cof=args.kl_cof, style_cof=args.style_cof)
     
 
-    # vsc.run_training(train_loader, train_loader, args.epochs,
-    #                 args.report_interval, args.sample_size, reload_model=True,
-    #                 checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-    #                 logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
+    vsc.run_training(train_loader, train_loader, args.epochs,
+                    args.report_interval, args.sample_size, reload_model=True,
+                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
     # vsc.estimate_trained_model(test_loader)
     # vsc.generate_wav(test_loader, ckp_path='../'+args.log_dir+'/checkpoints',
@@ -137,5 +139,5 @@ if __name__=='__main__':
     # vsc.load_last_model(checkpoints_path='../'+args.log_dir+'/checkpoints')
     # train_feature_selection(vsc, train_loader, args)
 
-    vsc.vc_evaluation('VCC2SM1', 'VCC2SF1', evaluation_fp='../'+args.log_dir+'/evaluation',
-                     ckp_path='../'+args.log_dir+'/checkpoints',dataset_fp=args.dataset_fp)
+    # vsc.vc_evaluation('VCC2SM1', 'VCC2SF1', evaluation_fp='../'+args.log_dir+'/evaluation',
+    #                  ckp_path='../'+args.log_dir+'/checkpoints',dataset_fp=args.dataset_fp)
