@@ -109,7 +109,7 @@ class MulVAE(nn.Module):
             conv_layer = nn.Sequential(
                 ConvNorm(36 if i==0 else 512,
                         512,
-                        kernel_size=5, stride=2,
+                        kernel_size=5, stride=1,
                         padding=2,
                         dilation=1, w_init_gain='relu'),
                 nn.BatchNorm1d(512)
@@ -118,7 +118,7 @@ class MulVAE(nn.Module):
         self.enc_modules = nn.ModuleList(self.enc_modules)
         self.enc_lstm = nn.LSTM(dim_pre, dim_neck, 2, batch_first=True, bidirectional=True)
 
-        self.enc_linear = LinearNorm(2048, 256)
+        self.enc_linear = LinearNorm(2048*8, 256)
 
         
         # self.mu = LinearNorm(256, latent_dim)
@@ -128,23 +128,23 @@ class MulVAE(nn.Module):
         self.content = LinearNorm(256, (latent_dim - self.speaker_size)*2)
         ############################ Decoder Architecture ####################
         self.dec_pre_linear1 = nn.Linear(latent_dim, 256)
-        self.dec_pre_linear2 = nn.Linear(256, 2048)
+        self.dec_pre_linear2 = nn.Linear(256, 2048*8)
         self.dec_lstm1 = nn.LSTM(dim_neck*2, 512, 1, batch_first=True)
         self.dec_modules = []
 
         for i in range(3):
             if i==0:
                 dec_conv_layer =  nn.Sequential(           
-                        nn.ConvTranspose1d(dim_pre,
+                        nn.Conv1d(dim_pre,
                                 dim_pre,
-                                kernel_size=5, stride=2,
-                                padding=1, dilation=1),
+                                kernel_size=5, stride=1,
+                                padding=2, dilation=1),
                         nn.BatchNorm1d(dim_pre))
             else:
                 dec_conv_layer =  nn.Sequential(           
-                        nn.ConvTranspose1d(dim_pre,
+                        nn.Conv1d(dim_pre,
                                 dim_pre,
-                                kernel_size=5, stride=2,
+                                kernel_size=5, stride=1,
                                 padding=2, dilation=1),
                         nn.BatchNorm1d(dim_pre))
             self.dec_modules.append(dec_conv_layer)
@@ -216,7 +216,7 @@ class MulVAE(nn.Module):
         # print('-------------- output lstm shape2: ', output.shape)
         output,_ = self.dec_lstm2(output)
         output = self.dec_linear2(output)
-        return output.transpose(-1, -2)[:,:,:-1]
+        return output.transpose(-1, -2)
 
 ################## for MulVAE #######################################################
     # def forward(self, x, speaker_ids, train=True):
@@ -341,6 +341,8 @@ class ConvolutionalMulVAE(VariationalBaseModelGVAE):
                      q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1, train=False):  
         
         with torch.autograd.set_detect_anomaly(True):
+            # print('x1: ', x1.shape)
+            # print('recons x1: ', x_recon1.shape)
             # MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum').div(self.batch_size)
             MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='sum').div(self.batch_size)
             MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='sum').div(self.batch_size)

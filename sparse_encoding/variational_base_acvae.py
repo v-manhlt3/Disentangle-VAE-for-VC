@@ -12,7 +12,7 @@ from sparse_encoding.plot import *
 from sparse_encoding.train_feature_selection import feature_selection
 from sparse_encoding.feature_selection import FeatureSelection
 from sparse_encoding import utils
-from sparse_encoding import conv_mulvae
+from sparse_encoding import conv_mulvae_mel
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from preprocessing.processing import build_model, wavegen
@@ -57,21 +57,21 @@ class VariationalBaseModelGVAE():
         if train:
             self.optimizer.zero_grad()
         
-        recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
-        self.model(data1, data2)
-
-        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
         # self.model(data1, data2)
 
-        loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        self.loss_functionGVAE(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+        recons_x1, recons_x2, recons_x1_hat,recons_x2_hat,q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
+        self.model(data1, data2)
 
         # loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        # self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
+        # self.loss_functionGVAE2(data1, data2, recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
+
+        loss, recons_loss1, recons_loss2, recons_loss1_hat, recons_loss2_hat, z1_kl_loss, z2_kl_loss, z_style_kl = \
+        self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2, recons_x1_hat, recons_x2_hat,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
         if train:
             loss.backward()
             self.optimizer.step()
-        return loss.item(), recons_loss1.item(), recons_loss2.item(), z1_kl_loss.item(), z2_kl_loss.item(), z_style_kl.item()
+        return loss.item(), recons_loss1.item(), recons_loss2.item(), recons_loss1_hat.item(), recons_loss2_hat.item(), z1_kl_loss.item(), z2_kl_loss.item(), z_style_kl.item()
     
     # TODO: Perform transformations inside DataLoader (extend datasets.MNIST)
     def transform(self, batch):
@@ -109,6 +109,7 @@ class VariationalBaseModelGVAE():
         self.model.train()
         train_loss, total_z_style_kl = 0, 0
         total_recons_loss1, total_recons_loss2, total_z1_kl_loss, total_z2_kl_loss = 0, 0, 0, 0
+        total_recons_loss1_hat, total_recons_loss2_hat = 0,0
         for batch_idx, (data1, data2, speaker_ids) in enumerate(tqdm(train_loader)):
             
             data1 = data1.to(torch.device("cuda")).float()
@@ -121,13 +122,15 @@ class VariationalBaseModelGVAE():
             speaker_ids = speaker_ids.view(-1)
 
 
-            loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = self.step(data1, data2, speaker_ids,train=True)
+            loss, recons_loss1, recons_loss2,recons_loss1_hat, recons_loss2_hat, z1_kl_loss, z2_kl_loss, z_style_kl = self.step(data1, data2, speaker_ids,train=True)
             train_loss += loss
             total_recons_loss1 += recons_loss1
             total_recons_loss2 += recons_loss2
             total_z1_kl_loss += z1_kl_loss
             total_z2_kl_loss += z2_kl_loss
             total_z_style_kl += z_style_kl
+            total_recons_loss1_hat += recons_loss1_hat
+            total_recons_loss2_hat += recons_loss2_hat
 
             # if (batch_idx+1) % self.log_interval == 0:
             #     logging_func('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
@@ -141,7 +144,7 @@ class VariationalBaseModelGVAE():
         logging_func('====> Epoch: {} Average loss: {:.4f}'.format(
               epoch, train_loss / len(train_loader.dataset)))
         
-        return total_recons_loss1, total_recons_loss2, total_z1_kl_loss, total_z2_kl_loss, z_style_kl
+        return total_recons_loss1, total_recons_loss2, total_recons_loss1_hat, total_recons_loss2_hat, total_z1_kl_loss, total_z2_kl_loss, z_style_kl
         
         
     # Returns the VLB for the test set
@@ -223,14 +226,17 @@ class VariationalBaseModelGVAE():
         name = self.model.__class__.__name__
         run_name = f'{name}_{self.dataset}_{start_epoch}_{epochs}_' \
                    f'{self.latent_sz}_{str(self.lr).replace(".", "-")}'
-        # logger = Logger(f'{logs_path}/{run_name}')
+        # logger = Logger(f'{logs_path}/{run_name}')f
         # logging_func(f'Training {name} model...')
         writer = SummaryWriter(f'{logs_path}/{run_name}')
         for epoch in range(start_epoch, start_epoch + epochs):
-            total_recons_loss1, total_recons_loss2,total_z1_kl_loss, total_z2_kl_loss, total_z_style_kl = self.train(train_loader, epoch, logging_func)
+            print('kl coef: ', self.kl_cof)
+            total_recons_loss1, total_recons_loss2, total_recons_loss1_hat, total_recons_loss2_hat,total_z1_kl_loss, total_z2_kl_loss, total_z_style_kl = self.train(train_loader, epoch, logging_func)
             
             print('recons loss1 epoch_{}: {}'.format(epoch, total_recons_loss1 / len(train_loader)))
             print('recons loss2 epoch_{}: {}'.format(epoch, total_recons_loss2 / len(train_loader)))
+            print('recons loss1 hat epoch_{}: {}'.format(epoch, total_recons_loss1_hat / len(train_loader)))
+            print('recons loss2 hat epoch_{}: {}'.format(epoch, total_recons_loss2_hat / len(train_loader)))
             print('Z1 KL loss epoch_{}: {}'.format(epoch, total_z1_kl_loss / len(train_loader)))
             print('Z2 kL loss epoch_{}: {}'.format(epoch, total_z2_kl_loss / len(train_loader)))
             print('Z Style KL epoch_{}: {}'.format(epoch, total_z_style_kl / len(train_loader)))
@@ -244,6 +250,7 @@ class VariationalBaseModelGVAE():
             # self.update_()
             # For each report interval store model and save images
             if epoch % report_interval == 0:
+                # self.update_kl()
                 if not os.path.exists(images_path):
                     os.mkdir(images_path)
                 if not os.path.exists(checkpoints_path):
@@ -252,6 +259,11 @@ class VariationalBaseModelGVAE():
                     torch.save(self.model.state_dict(), 
                                f'{checkpoints_path}/{run_name}_{epoch}.pth')
                     self.estimate_trained_model(test_loader, checkpoints_path, estimation_dir)
+
+            # if epoch == 120:
+            #     self.set_kl(1)
+            # if epoch % 50 == 0:
+            #     self.update_kl()
 
     def estimate_trained_model(self, test_loader, checkpoints_path, estimation_dir):
 
@@ -272,10 +284,10 @@ class VariationalBaseModelGVAE():
 
             speaker_ids = speaker_ids.view(-1)
 
-            recons_x1, recons_x2, _, _, _,_,_,_ = \
+            _,_,recons_x1, recons_x2, _, _, _,_,_,_ = \
             self.model(data1, data2,train=False)
             
-            for i in range(3):
+            for i in range(2):
 
                 original_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_original_mel_' +str(i)+'.png')
                 recons_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_recons_mel_' +str(i)+'.png')
@@ -462,8 +474,8 @@ class VariationalBaseModelGVAE():
             os.mkdir(os.path.join(evaluation_fp, 'mcep',source_speaker + '_to_'+target_speaker))
         fp2 = os.path.join(evaluation_fp, 'mcep',source_speaker + '_to_'+target_speaker)
 
-        # epoch = self.load_last_model(ckp_path, logging_func=print)
-        epoch = self.load_model(ckp_path, 9900, logging_func=print)
+        epoch = self.load_last_model(ckp_path, logging_func=print)
+        # epoch = self.load_model(ckp_path, 9900, logging_func=print)
         self.model.eval()
 
         source_utt_fp = glob(os.path.join(dataset_fp, source_speaker, '*.npz'))
@@ -472,21 +484,24 @@ class VariationalBaseModelGVAE():
         # source_utt_fp = sorted(source_utt_fp)
         # target_utt_fp = sorted(target_utt_fp)
 
-        stat_data_fp = '/home/ubuntu/vcc2018_stat_data/'
+        stat_data_fp = os.path.join('/home/ubuntu/vcc2018_stat_data/')  
 
         src_logf0 = np.load(stat_data_fp + 'log_f0_' + source_speaker + '.npz')
-        src_logf0_mean = src_logf0['mean']
-        src_logf0_std = src_logf0['std']
+        # src_logf0_mean = src_logf0['mean']
+        # src_logf0_std = src_logf0['std']
         src_mcep = np.load(stat_data_fp + 'mcep_' + source_speaker + '.npz')
         src_mcep_mean = src_mcep['mean']
         scr_mcep_std = src_mcep['std']
 
+        ''' ------------------for known speakers------------------------------------ '''
         trg_logf0 = np.load(stat_data_fp + 'log_f0_' + target_speaker + '.npz')
-        trg_logf0_mean = trg_logf0['mean']
-        trg_logf0_std = trg_logf0['std']
+        # trg_logf0_mean = trg_logf0['mean']
+        # trg_logf0_std = trg_logf0['std']
         trg_mcep = np.load(stat_data_fp + 'mcep_' + target_speaker + '.npz')
         trg_mcep_mean = trg_mcep['mean']
         trg_mcep_std = trg_mcep['std']
+        ''' -----------------for unknown speakers------------------------------------'''
+        # trg_utt_fp = os.path.join('/home/ubuntu/vcc2016_training/', target_speaker)
 
         for utt_fp in source_utt_fp:
             
@@ -500,13 +515,27 @@ class VariationalBaseModelGVAE():
 
             src_mcc = utt1['normalized_mc']
             print('source mcc shape: ', src_mcc.shape)
+            # print('length of target files: ', len(target_utt_fp))
+            # print('random index: ', rnd_trg)
             voice_length = src_mcc.shape[0]
             src_ap = utt1['ap']
             src_f0 = utt1['f0']
             src_sp = utt1['sp']
             utt_id = utt_fp.split('/')[-1].split('.')[0]
-            # print(utt_id)
-            # print(src_mcc.shape)
+            '''------------------------extract logF0 of target utterances--------------------------------------'''
+            # trg_utt_id = target_utt_fp[rnd_trg].split('/')[-1].split('.')[0]
+            # trg_wav,_ = librosa.load(os.path.join(trg_utt_fp, trg_utt_id +'.wav'), sr=16000)
+            # f0, timeaxis, sp, ap, mc = world_encode_data(wav=trg_wav.astype(np.float), fs=16000)
+            # log_f0 = np.ma.log(f0)
+            trg_logf0 = np.ma.log(utt2['f0'])
+            trg_logf0_mean = trg_logf0.mean()
+            trg_logf0_std = trg_logf0.std()
+            src_logf0 = np.ma.log(src_f0)
+            src_logf0_mean = src_logf0.mean()
+            src_logf0_std = src_logf0.std()
+            print(src_logf0_mean)
+            print(trg_logf0_mean)
+            '''------------------------------------------------------------------------------------------------'''
             
 
             src_mcc_chunk = chunking_mcc(src_mcc.T, 128).cuda().float()
@@ -524,18 +553,140 @@ class VariationalBaseModelGVAE():
             cvt_voice_mcc = torch.cat([cvt_mcc[i] for i in range(cvt_mcc.shape[0])], 1)
             cvt_voice_mcc = cvt_voice_mcc.cpu().detach().numpy()
             cvt_voice_mcc = cvt_voice_mcc.T.astype(np.double)
-            # cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]
+            # cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]    
+
+            '''origin code'''
+            # cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]*src_mcep_std + src_mcep_mean
+            # cvt_sp = world_decode_mc(np.ascontiguousarray(cvt_voice_mcc), SR)
+            # converted_f0 = pitch_conversion(f0=src_f0, mean_log_src=src_logf0_mean, std_log_src=src_logf0_std,mean_log_target=trg_logf0_mean, std_log_target=trg_logf0_std)
+            # cvt_wav = world_speech_synthesis(f0=converted_f0, sp=cvt_sp, ap=src_ap, frame_period=5, fs=SR)
+            # wav_fp = os.path.join(fp1, 'cvt_'+str(utt_id)+'.wav')
+            # mcep_fp = os.path.join(fp2, str(utt_id) + '.npz')
+
+            # librosa.output.write_wav(wav_fp, cvt_wav, sr=SR)
+            # np.savez(mcep_fp, mcc=cvt_voice_mcc, f0=converted_f0)
+            ''''''''''''''''''''''''''''''''''''''''''
+            cvt_mcc_s = self.model.decode(source_z)
+            cvt_voice_mcc_s = torch.cat([cvt_mcc_s[i] for i in range(cvt_mcc_s.shape[0])], 1)
+            cvt_voice_mcc_s = cvt_voice_mcc_s.cpu().detach().numpy()
+            cvt_voice_mcc_s = cvt_voice_mcc_s.T.astype(np.double)
 
             cvt_voice_mcc = cvt_voice_mcc[:voice_length,:]*src_mcep_std + src_mcep_mean
+            cvt_sp_t = world_decode_mc(np.ascontiguousarray(cvt_voice_mcc), SR)
 
-            cvt_sp = world_decode_mc(np.ascontiguousarray(cvt_voice_mcc), SR)
+            cvt_voice_mcc_s = cvt_voice_mcc_s[:voice_length,:]*src_mcep_std + src_mcep_mean
+            cvt_sp_s = world_decode_mc(np.ascontiguousarray(cvt_voice_mcc_s), SR)
+            
+            gained_sp = np.multiply(src_sp, np.divide(cvt_sp_t, cvt_sp_s))
+            # print(np.divide(cvt_sp_t, cvt_sp_s))
             converted_f0 = pitch_conversion(f0=src_f0, mean_log_src=src_logf0_mean, std_log_src=src_logf0_std,mean_log_target=trg_logf0_mean, std_log_target=trg_logf0_std)
-            cvt_wav = world_speech_synthesis(f0=converted_f0, sp=cvt_sp, ap=src_ap, frame_period=5, fs=SR)
-            wav_fp = os.path.join(fp1, str(utt_id)+'.wav')
+            cvt_wav = world_speech_synthesis(f0=converted_f0, sp=gained_sp, ap=src_ap, frame_period=5, fs=SR)
+            wav_fp = os.path.join(fp1, 'cvt_'+str(utt_id)+'.wav')
             mcep_fp = os.path.join(fp2, str(utt_id) + '.npz')
 
             librosa.output.write_wav(wav_fp, cvt_wav, sr=SR)
             np.savez(mcep_fp, mcc=cvt_voice_mcc, f0=converted_f0)
+
+    def voice_conversion_mel(self,
+                           ckp_path, generation_dir, dataset_fp='/home/ubuntu/VCTK_mel'):
+        src_spk = 'VCTK-Corpus_wav16_p225'
+        trg_spk = 'VCTK-Corpus_wav16_p226'
+        source_speaker= src_spk.split('_')[-1]
+        target_speaker= trg_spk.split('_')[-1]
+        save_dir = os.path.join(generation_dir, source_speaker +'_to_'+target_speaker)
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+
+        epoch = self.load_last_model(ckp_path, logging_func=print)
+        self.model.eval()
+        vocoder_model = build_model().to(device)
+        ckpt = torch.load('/home/ubuntu/checkpoint_step001000000_ema.pth')
+        vocoder_model.load_state_dict(ckpt['state_dict'])
+        #################################################################################
+        source_utt_fp = glob(os.path.join(dataset_fp, src_spk, "*.npy"))
+        source_utt_fp = np.sort(source_utt_fp)
+        # rnd_idx = np.random.shuffle(source_utt_fp)
+        target_utt_fp = glob(os.path.join(dataset_fp, trg_spk, '*.npy'))
+        print('--------------- len: ', len(source_utt_fp))
+        for i in range(10):
+        # for utt_fp in source_utt_fp:
+            
+            source_mel = np.load(source_utt_fp[i])
+            source_mel = chunking_mel(source_mel).cuda().float()
+            rnd_trg = np.random.choice(len(target_utt_fp), 1)[0]
+            # target_mel = dataset.get_batch_utterances(target_speaker, 10).cuda().float()
+            # print('------------------------',rnd_trg)
+            target_mel = np.load(target_utt_fp[rnd_trg])
+            target_mel = chunking_mel(target_mel).cuda().float()
+
+            
+            utterance_id = source_utt_fp[i].split('/')[-1].split('.')[0].split("_")[-1]
+            print('convert utterance: {} from --->{} to --->{}'.format(utterance_id, src_spk, trg_spk))
+            with torch.no_grad():
+                src_style_mu, src_style_logvar, src_content_mu, src_content_logvar = self.model.encode(source_mel)
+                trg_style_mu, trg_style_logvar, trg_content_mu, trg_content_logvar = self.model.encode(target_mel)
+
+                src_style = torch.mean(src_style_mu, axis=0, keepdim=True).repeat(source_mel.shape[0], 1)
+                trg_style = torch.mean(trg_style_mu, axis=0, keepdim=True).repeat(source_mel.shape[0], 1)
+                
+                source_z = torch.cat([src_style, src_content_mu], dim=-1)
+                convert_z = torch.cat([trg_style, src_content_mu], dim=-1)
+                
+
+                
+                recons_mel = self.model.decode(source_z)
+                # recons_mel_hat = self.model.postnet(recons_mel)
+                # recons_mel = recons_mel_hat + recons_mel_hat
+
+                recons_voice = torch.cat([recons_mel[i] for i in range(recons_mel.shape[0])], 1)
+                recons_voice = recons_voice.cpu().detach().numpy()
+
+                converted_mel = self.model.decode(convert_z)
+                converted_mel_hat = self.model.postnet(converted_mel)
+                converted_mel = converted_mel + converted_mel_hat
+
+
+                converted_voice = torch.cat([converted_mel[i] for i in range(converted_mel.shape[0])], 1)
+                converted_voice = converted_voice.cpu().detach().numpy()
+
+                source_mel = torch.cat([source_mel[i] for i in range(source_mel.shape[0])], 1)
+                source_mel = source_mel.cpu().detach().numpy()
+
+                # print('ratio between converted voice and recons voice: ', np.divide(converted_voice, recons_voice))
+                spectral_detail = np.multiply(source_mel, np.divide(recons_voice, converted_voice))
+                # plt.figure()
+                # plt.title('original_' + source_speaker+'_'+ utterance_id)
+                # librosa.display.specshow(source_mel, x_axis='time', y_axis='mel', sr=16000)
+                # plt.colorbar(format='%f')
+                # plt.savefig(os.path.join(save_dir, 'original_' + source_speaker +'_'+ utterance_id+'.png'))
+
+                # plt.figure()
+                # plt.title('convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id)
+                # librosa.display.specshow(converted_voice, x_axis='time', y_axis='mel', sr=16000)
+                # plt.colorbar(format='%f')
+                # plt.savefig(os.path.join(save_dir, 'convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id+'.png'))
+
+                # plt.figure()
+                # plt.title('reconstruct_' + source_speaker +'_' + utterance_id)
+                # librosa.display.specshow(recons_voice, x_axis='time', y_axis='mel', sr=16000)
+                # plt.colorbar(format='%f')
+                # plt.savefig(os.path.join(save_dir, 'recons_'+ source_speaker +'_' + utterance_id + '.png'))
+
+                converted_voice = np.transpose(converted_voice, (-1, -2))
+                spectral_detail = np.transpose(spectral_detail, (-1, -2))
+                recons_voice = np.transpose(recons_voice, (-1, -2))
+                source_mel = np.transpose(source_mel, (-1, -2))
+
+                waveform = wavegen(vocoder_model, converted_voice)
+                # recons_waveform = wavegen(vocoder_model, source_mel)
+
+                # recons_voice = np.transpose(recons_voice, (-1, -2))
+                # recons_waveform = wavegen(vocoder_model, recons_voice)
+
+                librosa.output.write_wav(os.path.join(save_dir,
+                'convert_'+source_speaker+'_to_'+target_speaker+'_'+utterance_id.split('.')[0]+'.wav'), waveform, sr=16000)
+                # librosa.output.write_wav(os.path.join(generation_dir,
+                # 'recons_'+source_speaker+'_'+utterance_id+'.wav'), recons_waveform, sr=16000)
 
 
 ############################################# Helper functions #####################################

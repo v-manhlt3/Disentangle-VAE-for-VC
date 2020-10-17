@@ -38,6 +38,52 @@ def tile(a, dim, n_tile):
     a = a.repeat(*(repeat_idx))
     order_index = torch.cuda.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]))
     return torch.index_select(a, dim, order_index)
+
+class Postnet(nn.Module):
+    """Postnet
+        - Five 1-d convolution with 512 channels and kernel size 5
+    """
+
+    def __init__(self):
+        super(Postnet, self).__init__()
+        self.convolutions = nn.ModuleList()
+
+        self.convolutions.append(
+            nn.Sequential(
+                ConvNorm(80, 512,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='tanh'),
+                nn.BatchNorm1d(512))
+        )
+
+        for i in range(1, 5 - 1):
+            self.convolutions.append(
+                nn.Sequential(
+                    ConvNorm(512,
+                             512,
+                             kernel_size=5, stride=1,
+                             padding=2,
+                             dilation=1, w_init_gain='tanh'),
+                    nn.BatchNorm1d(512))
+            )
+
+        self.convolutions.append(
+            nn.Sequential(
+                ConvNorm(512, 80,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='linear'),
+                nn.BatchNorm1d(80))
+            )
+
+    def forward(self, x):
+        for i in range(len(self.convolutions) - 1):
+            x = torch.tanh(self.convolutions[i](x))
+
+        x = self.convolutions[-1](x)
+
+        return x 
 ############################################################################
 
 class LinearNorm(torch.nn.Module):
@@ -101,15 +147,15 @@ class MulVAE(nn.Module):
         # self.mse_cof = mse_cof
         # self.kl_cof = kl_cof
         # self.style_cof = style_cof
-        # self.postnet = Postnet()
+        self.postnet = Postnet()
 
         ############################## Encoder Architecture ###################
         self.enc_modules = []
         for i in range(3):
             conv_layer = nn.Sequential(
-                ConvNorm(36 if i==0 else 512,
+                ConvNorm(80 if i==0 else 512,
                         512,
-                        kernel_size=5, stride=2,
+                        kernel_size=5, stride=1,
                         padding=2,
                         dilation=1, w_init_gain='relu'),
                 nn.BatchNorm1d(512)
@@ -118,40 +164,42 @@ class MulVAE(nn.Module):
         self.enc_modules = nn.ModuleList(self.enc_modules)
         self.enc_lstm = nn.LSTM(dim_pre, dim_neck, 2, batch_first=True, bidirectional=True)
 
-        self.enc_linear = LinearNorm(2048, 256)
+        # self.enc_linear = LinearNorm(16384, 2048)
+        self.enc_linear = LinearNorm(8192, 2048)
 
         
         # self.mu = LinearNorm(256, latent_dim)
         # self.logvar = LinearNorm(256, latent_dim)
 
-        self.style = LinearNorm(256, self.speaker_size*2)
-        self.content = LinearNorm(256, (latent_dim - self.speaker_size)*2)
+        self.style = LinearNorm(2048, self.speaker_size*2)
+        self.content = LinearNorm(2048, (latent_dim - self.speaker_size)*2)
         ############################ Decoder Architecture ####################
-        self.dec_pre_linear1 = nn.Linear(latent_dim, 256)
-        self.dec_pre_linear2 = nn.Linear(256, 2048)
+        self.dec_pre_linear1 = nn.Linear(latent_dim, 2048)
+        # self.dec_pre_linear2 = nn.Linear(2048, 16384)
+        self.dec_pre_linear2 = nn.Linear(2048, 8192)
         self.dec_lstm1 = nn.LSTM(dim_neck*2, 512, 1, batch_first=True)
         self.dec_modules = []
 
         for i in range(3):
             if i==0:
                 dec_conv_layer =  nn.Sequential(           
-                        nn.ConvTranspose1d(dim_pre,
+                        nn.Conv1d(dim_pre,
                                 dim_pre,
-                                kernel_size=5, stride=2,
-                                padding=1, dilation=1),
+                                kernel_size=5, stride=1,
+                                padding=2, dilation=1),
                         nn.BatchNorm1d(dim_pre))
             else:
                 dec_conv_layer =  nn.Sequential(           
-                        nn.ConvTranspose1d(dim_pre,
+                        nn.Conv1d(dim_pre,
                                 dim_pre,
-                                kernel_size=5, stride=2,
+                                kernel_size=5, stride=1,
                                 padding=2, dilation=1),
                         nn.BatchNorm1d(dim_pre))
             self.dec_modules.append(dec_conv_layer)
         self.dec_modules = nn.ModuleList(self.dec_modules)
 
         self.dec_lstm2 = nn.LSTM(dim_pre, 1024, 2, batch_first=True)
-        self.dec_linear2 = LinearNorm(1024, 36)
+        self.dec_linear2 = LinearNorm(1024, 80)
         self.apply(init_weights)
     
 
@@ -216,7 +264,7 @@ class MulVAE(nn.Module):
         # print('-------------- output lstm shape2: ', output.shape)
         output,_ = self.dec_lstm2(output)
         output = self.dec_linear2(output)
-        return output.transpose(-1, -2)[:,:,:-1]
+        return output.transpose(-1, -2)
 
 ################## for MulVAE #######################################################
     # def forward(self, x, speaker_ids, train=True):
@@ -265,11 +313,11 @@ class MulVAE(nn.Module):
         recons_x1 = self.decode(z1)
         recons_x2 = self.decode(z2)
 
-        # recons_x1_hat = recons_x1 + self.postnet(recons_x1)
-        # recons_x2_hat = recons_x2 + self.postnet(recons_x2)        
-        # return recons_x1, recons_x2, content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
+        recons_x1_hat = recons_x1 + self.postnet(recons_x1)
+        recons_x2_hat = recons_x2 + self.postnet(recons_x2)        
+        return recons_x1, recons_x2, recons_x1_hat, recons_x2_hat,content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
         
-        return recons_x1, recons_x2, content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
+        # return recons_x1_hat, recons_x2_hat, content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
         # return recons_x1, recons_x2, q_z1_mu, q_z2_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1
 #######################################################################################
 
@@ -337,27 +385,33 @@ class ConvolutionalMulVAE(VariationalBaseModelGVAE):
         return LOSS, MSE_x1, MSE_x2, z1_kl_loss, z2_kl_loss, z_kl_style
 
 ################# Original loss function for paper "Weakly-Supervised Disentanglement Without Compromises" #########
-    def loss_functionGVAE2(self, x1, x2, x_recon1, x_recon2,
+    def loss_functionGVAE2(self, x1, x2, x_recon1, x_recon2, recons_x1_hat, recons_x2_hat,
                      q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1, train=False):  
         
         with torch.autograd.set_detect_anomaly(True):
-            # MSE0 = torch.nn.functional.l1_loss(x, x_recon0, reduction='sum').div(self.batch_size)
             MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='sum').div(self.batch_size)
             MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='sum').div(self.batch_size)
-
             # MSE_x1 = torch.nn.functional.l1_loss(x1, x_recon1, reduction='mean')
             # MSE_x2 = torch.nn.functional.l1_loss(x2, x_recon2, reduction='mean')
 
-            z1_kl_loss = (-0.5)*torch.sum(1 + q_z1_logvar - q_z1_mu.pow(2) - q_z1_logvar.exp()).div(self.batch_size)
-            z2_kl_loss = (-0.5)*torch.sum(1 + q_z2_logvar - q_z2_mu.pow(2) - q_z2_logvar.exp()).div(self.batch_size)
+            MSE_x1_hat = torch.nn.functional.l1_loss(x1, recons_x1_hat, reduction='sum').div(self.batch_size)
+            MSE_x2_hat = torch.nn.functional.l1_loss(x2, recons_x2_hat, reduction='sum').div(self.batch_size)
+            # MSE_x1_hat = torch.nn.functional.l1_loss(x1, recons_x1_hat, reduction='mean')
+            # MSE_x2_hat = torch.nn.functional.l1_loss(x2, recons_x2_hat, reduction='mean')
+
+
+            # z1_kl_loss = (-0.5)*torch.sum(1 + q_z1_logvar - q_z1_mu.pow(2) - q_z1_logvar.exp()).div(self.batch_size)
+            # z2_kl_loss = (-0.5)*torch.sum(1 + q_z2_logvar - q_z2_mu.pow(2) - q_z2_logvar.exp()).div(self.batch_size)
+            z1_kl_loss = (-0.5)*torch.sum(1 + q_z1_logvar - q_z1_mu.pow(2) - q_z1_logvar.exp(), axis=-1).mean()
+            z2_kl_loss = (-0.5)*torch.sum(1 + q_z2_logvar - q_z2_mu.pow(2) - q_z2_logvar.exp(), axis=-1).mean()
 
             z_kl_style = (-1)*torch.sum(1 + style_logvar1 - style_mu1.pow(2) - style_logvar1.exp()).div(self.batch_size)
             # z_kl_style = torch.sum(style_mu1).div(self.batch_size)
 
             # LOSS = 10*MSE_x1 + 10*MSE_x2 + 10*z1_kl_loss + 10*z2_kl_loss + 0.1*z_kl_style
-            LOSS = self.mse_cof*(MSE_x1 + MSE_x2) + self.kl_cof*(z1_kl_loss + z2_kl_loss)
+            LOSS = self.mse_cof*(MSE_x1 + MSE_x2 + MSE_x1_hat + MSE_x2_hat) + self.kl_cof*(z1_kl_loss + z2_kl_loss)
         
-        return LOSS, MSE_x1, MSE_x2, z1_kl_loss, z2_kl_loss, z_kl_style
+        return LOSS, MSE_x1, MSE_x2, MSE_x1_hat, MSE_x2_hat, z1_kl_loss, z2_kl_loss, z_kl_style
 
     def update_(self):
         self.model.update_c()
@@ -376,12 +430,12 @@ class ConvolutionalMulVAE(VariationalBaseModelGVAE):
                 kl_divergence = kl_divergence + ( torch.pow((mu[:,j] - alpha*mu[:,j-1]), 2) + torch.pow(alpha,2)*logvar[:,j-1] )/(1 - torch.pow(alpha,2) )
 
         return (-0.5)*torch.sum(kl_divergence)
-
     def update_kl(self):
         self.kl_cof = min(self.kl_cof*2, 10)
-
+    
     def set_kl(self, beta):
-        self.kl_cof = beta
+        self.kl = beta
+
 
 def f_function(x,coef=1):
     return coef*x - torch.log(x) - 1

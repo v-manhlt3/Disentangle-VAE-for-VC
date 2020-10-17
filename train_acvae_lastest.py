@@ -1,7 +1,7 @@
 import torch
 import numpy as np 
 from sparse_encoding.conv_vae import ConvolutionalVSC
-from sparse_encoding.conv_mulvae import ConvolutionalMulVAE
+from sparse_encoding.conv_mulvae_mel import ConvolutionalMulVAE
 # from sparse_encoding.acvae import ConvolutionalGVAE
 import argparse, os
 from preprocessing.dataset_mel import SpeechDatasetMCC2, SpeechDatasetGVAE
@@ -52,8 +52,8 @@ def get_parse():
 def get_dataset(dataset_fp, batch_size, num_utt, shuffle_dataset=True):
     
     # sample length for past experiments is 64
-    dataset = SpeechDatasetMCC2(dataset_fp, samples_length=128)
-    # dataset = SpeechDatasetGVAE(dataset_fp, samples_length=64)
+    # dataset = SpeechDatasetMCC2(dataset_fp, samples_length=128)
+    dataset = SpeechDatasetGVAE(dataset_fp, samples_length=64)
 
     train_loader = DataLoader(dataset, batch_size=batch_size,
                              pin_memory=True, shuffle=True)
@@ -103,14 +103,14 @@ if __name__=='__main__':
                           mse_cof=args.mse_cof, kl_cof=args.kl_cof, style_cof=args.style_cof)
     
 
-    vsc.run_training(train_loader, train_loader, args.epochs,
-                    args.report_interval, args.sample_size, reload_model=True,
-                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
+    # vsc.run_training(train_loader, train_loader, args.epochs,
+    #                 args.report_interval, args.sample_size, reload_model=True,
+    #                 checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+    #                 logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
     # vsc.estimate_trained_model(test_loader)
-    # vsc.generate_wav(test_loader, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                 generation_dir='../'+args.log_dir+'/generation/')
+    vsc.voice_conversion_mel(ckp_path='../'+args.log_dir+'/checkpoints',
+                    generation_dir='../'+args.log_dir+'/generation/')
 
     # vsc.analyze_latent_code(speaker_id='VCTK-Corpus_wav16_p225', ckp_path='../'+args.log_dir+'/checkpoints',
     #                         estimation_dir='../'+args.log_dir+'/analysis', dataset=dataset, utterance='p225_019.npy')
