@@ -5,6 +5,7 @@ from encoder.model import SpeakerEncoder
 from utils.profiler import Profiler
 from pathlib import Path
 import torch
+import math
 
 def sync(device: torch.device):
     # For correct profiling (cuda operations are async)
@@ -23,7 +24,7 @@ def train(run_id: str, clean_data_root: Path, models_dir: Path, umap_every: int,
         dataset,
         speakers_per_batch,
         utterances_per_speaker,
-        num_workers=8,
+        num_workers=8, pin_memory=True
     )
     
     # Setup the device on which to run the forward pass and the loss. These can be different, 
@@ -31,7 +32,7 @@ def train(run_id: str, clean_data_root: Path, models_dir: Path, umap_every: int,
     # hyperparameters) faster on the CPU.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # FIXME: currently, the gradient is None if loss_device is cuda
-    loss_device = torch.device("cpu")
+    loss_device = torch.device("cuda")
     
     # Create the model and the optimizer
     model = SpeakerEncoder(device, loss_device)
@@ -70,7 +71,8 @@ def train(run_id: str, clean_data_root: Path, models_dir: Path, umap_every: int,
         profiler.tick("Blocking, waiting for batch (threaded)")
         
         # Forward pass
-        inputs = torch.from_numpy(speaker_batch.data).to(device)
+        inputs = torch.from_numpy(speaker_batch.data).to(device).float()
+        #inputs = torch.transpose(inputs, -1, -2)
         sync(device)
         profiler.tick("Data to %s" % device)
         embeds = model(inputs)
@@ -78,11 +80,17 @@ def train(run_id: str, clean_data_root: Path, models_dir: Path, umap_every: int,
         profiler.tick("Forward pass")
         embeds_loss = embeds.view((speakers_per_batch, utterances_per_speaker, -1)).to(loss_device)
         loss, eer = model.loss(embeds_loss)
+        if eer==0:
+           continue
         sync(loss_device)
         profiler.tick("Loss")
 
         # Backward pass
+        model.similarity_weight.retain_grad()
+        model.similarity_bias.retain_grad()
         model.zero_grad()
+        if math.isnan(loss.item()):
+           continue
         loss.backward()
         profiler.tick("Backward pass")
         model.do_gradient_ops()

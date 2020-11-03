@@ -127,7 +127,3 @@ def permute_dims(z):
 
     return torch.cat(perm_z, 1)
 
-
-# test = torch.tensor([[1,2,3],[4,5,6]])
-# permutation = permute_dims(test)
-# print(permutation)

@@ -1,5 +1,5 @@
-from preprocessing.encoder.data_objects.random_cycler import RandomCycler
-from preprocessing.encoder.data_objects.utterance import Utterance
+from encoder.data_objects.random_cycler import RandomCycler
+from encoder.data_objects.utterance import Utterance
 from pathlib import Path
 
 # Contains the set of utterances of a single speaker

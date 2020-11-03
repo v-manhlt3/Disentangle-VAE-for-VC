@@ -18,7 +18,9 @@ class Utterance:
         partial utterance in the complete utterance.
         """
         frames = self.get_frames()
-        if frames.shape[0] == n_frames:
+        #frames = np.transpose(frames, (-1, -2))
+        #print('frames shape', frames.shape)
+        if frames.shape[0]:
             start = 0
         else:
             start = np.random.randint(0, frames.shape[0] - n_frames)

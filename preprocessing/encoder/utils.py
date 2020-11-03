@@ -2,7 +2,7 @@ import librosa
 import librosa.filters
 import numpy as np
 # from preprocessing.hparams import hparams
-from hparams import hparams
+from encoder.hparams import hparams
 from scipy.io import wavfile
 
 

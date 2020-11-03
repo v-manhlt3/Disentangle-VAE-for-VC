@@ -19,13 +19,14 @@ from preprocessing.processing import build_model, wavegen
 from preprocessing.WORLD_processing import *
 import numpy as np
 import librosa
+import pandas as pd
 
 
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class VariationalBaseModelGVAE():
+class VariationalBaseModelVAE():
     def __init__(self, dataset, width, height, channels, latent_sz, 
                  learning_rate, device, log_interval, batch_size, normalize=False, 
                  flatten=True):
@@ -57,14 +58,8 @@ class VariationalBaseModelGVAE():
         if train:
             self.optimizer.zero_grad()
         
-        # recons_x1, recons_x2, q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu1, style_logvar1 =\
-        # self.model(data1, data2)
-
         recons_x1, recons_x2, recons_x1_hat,recons_x2_hat,q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, style_mu, style_logvar =\
         self.model(data1, data2)
-
-        # loss, recons_loss1, recons_loss2, z1_kl_loss, z2_kl_loss, z_style_kl = \
-        # self.loss_functionGVAE2(data1, data2, recons_x1, recons_x2,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar, style_mu1, style_logvar1,train=train)
 
         loss, recons_loss1, recons_loss2, recons_loss1_hat, recons_loss2_hat, z1_kl_loss, z2_kl_loss, z_style_kl = \
         self.loss_functionGVAE2(data1,data2,recons_x1, recons_x2, recons_x1_hat, recons_x2_hat,q_z1_mu,q_z1_logvar,q_z2_mu, q_z2_logvar,style_mu, style_logvar,train=train)
@@ -73,15 +68,12 @@ class VariationalBaseModelGVAE():
             self.optimizer.step()
         return loss.item(), recons_loss1.item(), recons_loss2.item(), recons_loss1_hat.item(), recons_loss2_hat.item(), z1_kl_loss.item(), z2_kl_loss.item(), z_style_kl.item()
     
-    # TODO: Perform transformations inside DataLoader (extend datasets.MNIST)
     def transform(self, batch):
         if self.flatten_data: 
             batch_size = len(batch)
             batch = batch.view(batch_size, -1)
         if self.normalize_data:
             batch = batch / self.scaling_factor
-#         batch_norm = flattened_batch.norm(dim=1, p=2)
-#         flattened_batch /= batch_norm[:, None]
         return batch
         
     def inverse_transform(self, batch):
@@ -131,13 +123,6 @@ class VariationalBaseModelGVAE():
             total_z_style_kl += z_style_kl
             total_recons_loss1_hat += recons_loss1_hat
             total_recons_loss2_hat += recons_loss2_hat
-
-            # if (batch_idx+1) % self.log_interval == 0:
-            #     logging_func('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
-            #           .format(epoch, batch_idx * len(data), 
-            #                   len(train_loader.dataset),
-            #                   100. * batch_idx / len(train_loader),
-            #                   loss / len(data)))
 
         train_loader.dataset.shuffle_data()
 
@@ -195,7 +180,7 @@ class VariationalBaseModelGVAE():
 
     def load_model(self, checkpoints_path, epoch,logging_func=print):
         name = self.model.__class__.__name__
-        model_name = 'MulVAE_mnist_1701_200000000000000000_32_0-0001_' + str(epoch) +'.pth'
+        model_name = 'MulVAE_mnist_1_200000000000000000_32_0-0001_' + str(epoch) +'.pth'
         last_checkpoint = os.path.join(checkpoints_path, model_name)
         # logging_func('Last checkpoint: ', last_checkpoint)
         self.model.load_state_dict(torch.load(last_checkpoint))
@@ -260,16 +245,11 @@ class VariationalBaseModelGVAE():
                                f'{checkpoints_path}/{run_name}_{epoch}.pth')
                     self.estimate_trained_model(test_loader, checkpoints_path, estimation_dir)
 
-            # if epoch == 120:
-            #     self.set_kl(1)
-            # if epoch % 50 == 0:
-            #     self.update_kl()
 
     def estimate_trained_model(self, test_loader, checkpoints_path, estimation_dir):
 
         logging_epoch = self.load_last_model(checkpoints_path, logging_func=print)
         self.model.eval()
-        # estimate_dir = '../results2/images/estimation'
         if not os.path.exists(estimation_dir):
             os.mkdir(estimation_dir)
 
@@ -287,14 +267,12 @@ class VariationalBaseModelGVAE():
             _,_,recons_x1, recons_x2, _, _, _,_,_,_ = \
             self.model(data1, data2,train=False)
             
-            for i in range(2):
+            for i in range(10):
 
                 original_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_original_mel_' +str(i)+'.png')
                 recons_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_recons_mel_' +str(i)+'.png')
                 recons_mel = recons_x1[i]
-                origin_mel = data1[i]
-                # z_sample = self.model.reparameterize(mu[i], logvar[i], logspike[i])
-                # z = mu[i]
+                origin_mel = data1[i]]
 
                 plt.figure()
                 plt.title('reconstructed mel spectrogram')
@@ -308,8 +286,6 @@ class VariationalBaseModelGVAE():
                 plt.colorbar(format='%f')
                 plt.savefig(original_mel_fp)
 
-                # encoding_visualization(z, estimation_dir, i, logging_epoch, prefix='')
-                # encoding_visualization(z_sample, estimation_dir, i, logging_epoch, prefix='z_sample')
 
 
     def generate_wav(self, test_loader, ckp_path, generation_dir):
@@ -325,8 +301,7 @@ class VariationalBaseModelGVAE():
             os.mkdir(generation_dir)
 
         with torch.no_grad():
-            # data, utterances, speakers = next(iter(test_loader))
-            # data = data.to(torch.device("cuda")).float()
+
             original_wav_fn = 'SM1_100001'
             
             print('=====>the original wav is: ', original_wav_fn)
@@ -337,7 +312,6 @@ class VariationalBaseModelGVAE():
             data = data.to(torch.device("cuda")).float()
             _, recons_data, _, _, _ = self.model(data, train=False)
 
-            # original_mel = data[0].cpu().detach().numpy()
             recons_mel = torch.cat([recons_data[i] for i in range(recons_data.shape[0])], 1)
             print('recons mel shape: ', recons_mel.shape)
             recons_mel = recons_mel.cpu().detach().numpy()
@@ -357,111 +331,7 @@ class VariationalBaseModelGVAE():
             recons_mel = np.transpose(recons_mel, (-1, -2))
             waveform = wavegen(vocoder_model, recons_mel)
             librosa.output.write_wav(os.path.join(generation_dir, 'recons_'+original_wav_fn + '.wav'), waveform, sr=16000)
-    
-    def analyze_latent_code(self, speaker_id, estimation_dir, ckp_path, dataset, utterance=None):
 
-        if not os.path.exists(estimation_dir):
-            os.mkdir(estimation_dir)
-
-        epoch = self.load_last_model(ckp_path, logging_func=print)
-        self.model.eval()
-        if utterance == None:
-            batch_data = dataset.get_batch_utterances(speaker_id, 100)
-            batch_data =  batch_data.cuda().float()
-        # else:
-        #     batch_data,_,_ = dataset.get_batch_speaker(utterance)
-        #     batch_data =  batch_data.cuda().float()
-        #     speaker_id = 'analysi_utt' + utterance.split('.')[0]
-        else:
-            mel_spec = dataset.get_utterance(speaker_id,utterance)
-            batch_data = chunking_mel(mel_spec).cuda().float()
-
-        _,_, mu, logvar, logspike = self.model(batch_data)
-        latent_vectors = self.model.reparameterize(mu, logvar, logspike)
-        batch_idx = []
-        for idx in range(latent_vectors.shape[0]):
-            index = encoding_visualization(latent_vectors[idx,:], estimation_dir, idx, epoch,'')
-            batch_idx.append(index)
-        
-        print('mutal index: ', np.intersect1d(batch_idx[3], batch_idx[4],
-                                             batch_idx[5], batch_idx[6]))
-
-        # plot_latentvt_analysis(latent_vectors, estimation_dir, speaker_id, threshold_mean=0.1, threshold_std=0.7)
-
-    def voice_conversion_mcc(self, source_spk, target_spk, source_utt, target_utt,
-                            dataset, wav_fp, ckp_path, generation_dir):
-
-        epoch = self.load_last_model(ckp_path, logging_func=print)
-        self.model.eval()
-        utterance_id = wav_fp.split('/')[-1].split('.')[0]
-
-        source = dataset.get_utterance(source_spk, source_utt)
-        print('source input shape: ', source['normalized_mc'].shape)
-        source_mcc_norm = chunking_mcc(source['normalized_mc'].T, 128).cuda().float()
-        print('source_mcc_norm shape: ', source_mcc_norm.shape)
-        source_mcc_mean, source_mcc_std = source['mc_mean'], source['mc_std']
-        source_f0s = source['f0']
-        source_f0_mean, source_f0_std = logf0_statistics(source_f0s)
-
-        target = dataset.get_utterance(target_spk, target_utt)
-        target_mcc_norm = chunking_mcc(target['normalized_mc'].T, 128).cuda().float()
-        target_f0s = target['f0']
-        target_f0_mean, target_f0_std = logf0_statistics(target_f0s)
-
-        f0_converted = pitch_conversion(f0=source_f0s, mean_log_src=source_f0_mean, std_log_src=source_f0_std,
-                                        mean_log_target=target_f0_mean, std_log_target=target_f0_std)
-        wav, _ = librosa.load(wav_fp, sr=16000)
-        f0, timeaxis, sp, ap, mc = world_encode_data(wav=wav, fs=16000)
-
-        with torch.no_grad():
-            source_style_mu, source_style_logvar, source_content_mu, source_content_logvar = self.model.encode(source_mcc_norm)
-            target_style_mu, target_style_logvar, target_content_mu, target_content_logvar = self.model.encode(target_mcc_norm)
-            
-            source_style = torch.mean(source_style_mu, axis=0, keepdim=True).repeat(source_mcc_norm.shape[0], 1)
-            target_style = torch.mean(target_style_mu, axis=0, keepdim=True).repeat(source_mcc_norm.shape[0], 1)
-
-            source_z = torch.cat([source_style, source_content_mu], dim=-1)
-            convert_z = torch.cat([target_style, source_content_mu], dim=-1)
-
-            
-            recons_mcc = self.model.decode(source_z)
-            converted_mcc = self.model.decode(convert_z)    
-            
-            recons_voice = torch.cat([recons_mcc[i] for i in range(recons_mcc.shape[0])], 1)
-            recons_voice = recons_voice.cpu().detach().numpy()
-
-            converted_voice = torch.cat([converted_mcc[i] for i in range(converted_mcc.shape[0])], 1)
-            converted_voice = converted_voice.cpu().detach().numpy()
-
-            plt.figure()
-            plt.title('convert_' + source_spk +'_'+ target_spk+'_'+ utterance_id)
-            librosa.display.specshow(converted_voice, x_axis='time', y_axis='mel', sr=16000)
-            plt.colorbar(format='%f')
-            plt.savefig(os.path.join(generation_dir, 'convert_' + source_spk +'_'+ target_spk+'_'+ utterance_id+'.png'))
-
-            plt.figure()
-            plt.title('reconstruct_' + source_spk +'_' + utterance_id)
-            librosa.display.specshow(recons_voice, x_axis='time', y_axis='mel', sr=16000)
-            plt.colorbar(format='%f')
-            plt.savefig(os.path.join(generation_dir, 'recons_'+ source_spk +'_' + utterance_id + '.png'))
-            
-            recons_voice_mcc = recons_voice.T[:664,:] *source_mcc_std + source_mcc_mean
-            converted_voice_mcc = converted_voice.T[:664,:]*source_mcc_std + source_mcc_mean
-            # recons_voice_mcc = recons_voice.T[:808,:].astype(np.float)
-            # converted_voice_mcc = converted_voice.T[:808,:].astype(np.float)
-
-            recons_sp = world_decode_mc(np.ascontiguousarray(recons_voice_mcc), 16000)
-            converted_sp = world_decode_mc(np.ascontiguousarray(converted_voice_mcc), 16000)
-            
-            recons_wav = world_speech_synthesis(f0=f0, sp=recons_sp, ap=ap, fs=16000, frame_period=5.0)
-            converted_wav = world_speech_synthesis(f0=f0_converted, sp=converted_sp, ap=ap, fs=16000, frame_period=5.0)
-
-
-            librosa.output.write_wav(os.path.join(generation_dir,
-            'convert_'+source_spk+'_to_'+target_spk+'_'+utterance_id+'.wav'), converted_wav, sr=16000)
-
-            librosa.output.write_wav(os.path.join(generation_dir,
-            'recons_'+source_spk+'_'+ utterance_id +'.wav'), recons_wav, sr=16000)
 
     def vc_evaluation(self, source_speaker, target_speaker,
                      evaluation_fp, ckp_path, dataset_fp, SR=16000):
@@ -587,8 +457,7 @@ class VariationalBaseModelGVAE():
             librosa.output.write_wav(wav_fp, cvt_wav, sr=SR)
             np.savez(mcep_fp, mcc=cvt_voice_mcc, f0=converted_f0)
 
-    def voice_conversion_mel(self,
-                           ckp_path, generation_dir, dataset_fp='/home/ubuntu/VCTK_mel'):
+    def voice_conversion_mel(self, ckp_path, generation_dir, dataset_fp='/home/ubuntu/VCTK_mel'):
         src_spk = 'VCTK-Corpus_wav16_p225'
         trg_spk = 'VCTK-Corpus_wav16_p226'
         source_speaker= src_spk.split('_')[-1]
@@ -605,17 +474,15 @@ class VariationalBaseModelGVAE():
         #################################################################################
         source_utt_fp = glob(os.path.join(dataset_fp, src_spk, "*.npy"))
         source_utt_fp = np.sort(source_utt_fp)
-        # rnd_idx = np.random.shuffle(source_utt_fp)
         target_utt_fp = glob(os.path.join(dataset_fp, trg_spk, '*.npy'))
-        print('--------------- len: ', len(source_utt_fp))
-        for i in range(10):
-        # for utt_fp in source_utt_fp:
+        # print('--------------- len: ', len(source_utt_fp))
+
+        # for i in range(0, 1):
+        for utt_fp in source_utt_fp:
             
             source_mel = np.load(source_utt_fp[i])
             source_mel = chunking_mel(source_mel).cuda().float()
             rnd_trg = np.random.choice(len(target_utt_fp), 1)[0]
-            # target_mel = dataset.get_batch_utterances(target_speaker, 10).cuda().float()
-            # print('------------------------',rnd_trg)
             target_mel = np.load(target_utt_fp[rnd_trg])
             target_mel = chunking_mel(target_mel).cuda().float()
 
@@ -635,8 +502,6 @@ class VariationalBaseModelGVAE():
 
                 
                 recons_mel = self.model.decode(source_z)
-                # recons_mel_hat = self.model.postnet(recons_mel)
-                # recons_mel = recons_mel_hat + recons_mel_hat
 
                 recons_voice = torch.cat([recons_mel[i] for i in range(recons_mel.shape[0])], 1)
                 recons_voice = recons_voice.cpu().detach().numpy()
@@ -652,25 +517,33 @@ class VariationalBaseModelGVAE():
                 source_mel = torch.cat([source_mel[i] for i in range(source_mel.shape[0])], 1)
                 source_mel = source_mel.cpu().detach().numpy()
 
-                # print('ratio between converted voice and recons voice: ', np.divide(converted_voice, recons_voice))
+                source_mel = np.clip(source_mel, 0, 1)
+                converted_voice = np.clip(converted_voice, 0, 1)
+                recons_voice = np.clip(recons_voice, 0, 1)
+
                 spectral_detail = np.multiply(source_mel, np.divide(recons_voice, converted_voice))
-                # plt.figure()
-                # plt.title('original_' + source_speaker+'_'+ utterance_id)
-                # librosa.display.specshow(source_mel, x_axis='time', y_axis='mel', sr=16000)
-                # plt.colorbar(format='%f')
-                # plt.savefig(os.path.join(save_dir, 'original_' + source_speaker +'_'+ utterance_id+'.png'))
+                
+                plt.figure()
+                plt.title('original_' + source_speaker+'_'+ utterance_id)
+                librosa.display.specshow(source_mel, x_axis='time', y_axis='mel', sr=16000)
+                plt.colorbar(format='%f')
+                plt.savefig(os.path.join(save_dir, 'original_' + source_speaker +'_'+ utterance_id+'.png'))
 
-                # plt.figure()
-                # plt.title('convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id)
-                # librosa.display.specshow(converted_voice, x_axis='time', y_axis='mel', sr=16000)
-                # plt.colorbar(format='%f')
-                # plt.savefig(os.path.join(save_dir, 'convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id+'.png'))
+                plt.figure()
+                plt.title('convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id)
+                librosa.display.specshow(converted_voice, x_axis='time', y_axis='mel', sr=16000)
+                plt.colorbar(format='%f')
+                plt.xticks([])
+                plt.yticks([])
+                plt.savefig(os.path.join(save_dir, 'convert_' + source_speaker +'_'+ target_speaker+'_'+ utterance_id+'.png'))
 
-                # plt.figure()
-                # plt.title('reconstruct_' + source_speaker +'_' + utterance_id)
-                # librosa.display.specshow(recons_voice, x_axis='time', y_axis='mel', sr=16000)
-                # plt.colorbar(format='%f')
-                # plt.savefig(os.path.join(save_dir, 'recons_'+ source_speaker +'_' + utterance_id + '.png'))
+                plt.figure()
+                plt.title('reconstruct_' + source_speaker +'_' + utterance_id)
+                librosa.display.specshow(recons_voice, x_axis='time', y_axis='mel', sr=16000)
+                plt.colorbar(format='%f')
+                plt.xticks([])
+                plt.yticks([])
+                plt.savefig(os.path.join(save_dir, 'recons_'+ source_speaker +'_' + utterance_id + '.png'))
 
                 converted_voice = np.transpose(converted_voice, (-1, -2))
                 spectral_detail = np.transpose(spectral_detail, (-1, -2))
@@ -678,15 +551,63 @@ class VariationalBaseModelGVAE():
                 source_mel = np.transpose(source_mel, (-1, -2))
 
                 waveform = wavegen(vocoder_model, converted_voice)
-                # recons_waveform = wavegen(vocoder_model, source_mel)
-
-                # recons_voice = np.transpose(recons_voice, (-1, -2))
-                # recons_waveform = wavegen(vocoder_model, recons_voice)
 
                 librosa.output.write_wav(os.path.join(save_dir,
                 'convert_'+source_speaker+'_to_'+target_speaker+'_'+utterance_id.split('.')[0]+'.wav'), waveform, sr=16000)
-                # librosa.output.write_wav(os.path.join(generation_dir,
-                # 'recons_'+source_speaker+'_'+utterance_id+'.wav'), recons_waveform, sr=16000)
+
+
+    def spk_cluster(self, ckp_path, save_fn, spk_list, dataset):
+        
+        from sklearn.manifold import TSNE
+        import seaborn as sns
+
+        plt.rcParams.update({'font.size': 17})
+
+        epoch = self.load_last_model(ckp_path, logging_func=print)
+        self.model.eval()
+        df = pd.DataFrame()
+        tsne = TSNE(n_components=2, n_iter=100000, verbose=1, perplexity=40,metric='cosine')
+
+        arr_z = []
+        arr_spk = []
+
+        for i in range(len(spk_list)):
+
+            data, spk_ids = dataset.get_batch_utterances(spk_list[i], 250)
+            data = data.float().cuda()
+            spk_ids = [dataset.speaker_ids[spk] for spk in spk_ids]
+            # print(spk_ids)
+            z_spk,_,_,_ = self.model.encode(data)
+            z_spk= z_spk.detach().cpu().numpy()
+            
+            if i==0:
+                arr_z = z_spk
+                arr_spk = spk_ids
+            else:
+                arr_z = np.concatenate((arr_z, z_spk), axis=0)
+                arr_spk = np.concatenate((arr_spk, spk_ids), axis=0)
+
+        embedd_z = [arr_z[i] for i in range(arr_z.shape[0])]
+        spk_arr = [arr_spk[i].split('_')[-1] for i in range(arr_spk.shape[0])]
+        # print(df)
+
+        embs = tsne.fit_transform(embedd_z)
+        df['x'] = embs[:,0]
+        df['y'] = embs[:,1]
+        df['speaker'] = spk_arr
+
+        FS = (10, 8)
+        fig, ax = plt.subplots(figsize=FS)
+        plt.xticks([])
+        plt.yticks([])
+        sns.scatterplot(
+        x="x", y="y",
+        hue="speaker",
+        data=df,
+        legend="full",
+        alpha=0.3
+        )
+        plt.savefig('speaker_embedding.png')
 
 
 ############################################# Helper functions #####################################
@@ -708,16 +629,12 @@ def chunking_mel(melspectrogram):
 def chunking_mcc(mcc, length=128):
     data = []
     num_mcc = (mcc.shape[1]//length)+1
-    # print('number mel-cestra coff: ', num_mcc)
     for index in range(num_mcc):
         if index < num_mcc - 1:
             mcc_partition = mcc[:,index*length:index*length+length]
-            # print('mcc shape: ', mcc_partition.shape)
         else:
             mcc_partition = mcc[:,index*length:]
             mcc_partition = np.pad(mcc_partition, ((0,0),(0, length - mcc.shape[1]%length)), 'constant', constant_values=(0,0))
-            # print('last mcc shape: ', mcc_partition.shape)
-        # print('chunking mcc data: ', mcc_partition.shape)
         data.append(mcc_partition)
     return torch.tensor(data)
 

@@ -6,8 +6,9 @@ from warnings import warn
 import numpy as np
 import librosa
 import struct
-from hparams import hparams
-import utils 
+from encoder.hparams import hparams
+import encoder.utils as utils
+import soundfile as sf
 
 try:
     import webrtcvad
@@ -28,18 +29,19 @@ def preprocess_wav(fpath_or_wav: Union[str, Path, np.ndarray],
     just .wav), either the waveform as a numpy array of floats.
     :param source_sr: if passing an audio waveform, the sampling rate of the waveform before 
     preprocessing. After preprocessing, the waveform's sampling rate will match the data 
-    hyperparameters. If passing a filepath, the sampling rate will be automatically detected and 
+    ounyperparameters. If passing a filepath, the sampling rate will be automatically detected and 
     this argument will be ignored.
     """
     # Load the wav from disk if needed
     if isinstance(fpath_or_wav, str) or isinstance(fpath_or_wav, Path):
-        wav, source_sr = librosa.load(str(fpath_or_wav), sr=None)
+        wav, source_sr = librosa.load(str(fpath_or_wav), sr=None, duration=600.0)
+        #wav, source_sr =sf.read(str(fpath_or_wav))
     else:
         wav = fpath_or_wav
     
     # Resample the wav if needed
     if source_sr is not None and source_sr != sampling_rate:
-        wav = librosa.resample(wav, source_sr, sampling_rate)
+         wav = librosa.resample(wav, source_sr, sampling_rate)
         
     # Apply the preprocessing: normalize volume and shorten long silences 
     wav = normalize_volume(wav, audio_norm_target_dBFS, increase_only=True)
@@ -54,14 +56,23 @@ def wav_to_mel_spectrogram(wav):
     Derives a mel spectrogram ready to be used by the encoder from a preprocessed audio waveform.
     Note: this not a log-mel spectrogram.
     """
-    frames = librosa.feature.melspectrogram(
-        wav,
-        sampling_rate,
-        n_fft=hparams.fft_size,
-        hop_length=hparams.hop_size,
-        n_mels=hparams.num_mels
-    )
-    return preprocessing._normalize(frames.astype(np.float32).T)
+    # frames = librosa.feature.melspectrogram(
+    #     wav,
+    #     sampling_rate,
+    #     n_fft=800,
+    #     hop_length=200,
+    #     n_mels=hparams.num_mels
+    # )
+    
+    # mfcc = librosa.feature.mfcc(y=wav, sr=sampling_rate, S=frames)
+    # frames = librosa.power_to_db(frames, ref=np.max) - 16
+    # return utils._normalize(frames.astype(np.float32).T)
+
+    # setup dataset for training autovc
+    # transpose to train speaker emb
+    frames = utils.melspectrogram(wav)
+    # frames = np.transpose(frames, (1,0))
+    return frames
 
 
 def trim_long_silences(wav):

@@ -7,7 +7,7 @@ from scipy.optimize import brentq
 from torch import nn
 import numpy as np
 import torch
-
+import math
 
 class SpeakerEncoder(nn.Module):
     def __init__(self, device, loss_device):
@@ -122,6 +122,9 @@ class SpeakerEncoder(nn.Module):
         target = torch.from_numpy(ground_truth).long().to(self.loss_device)
         loss = self.loss_fn(sim_matrix, target)
         
+        if math.isnan(loss.item()): 
+            eer=0
+            return loss, eer
         # EER (not backpropagated)
         with torch.no_grad():
             inv_argmax = lambda i: np.eye(1, speakers_per_batch, i, dtype=np.int)[0]
