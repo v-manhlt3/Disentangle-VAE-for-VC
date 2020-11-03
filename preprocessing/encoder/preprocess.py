@@ -6,7 +6,7 @@ from encoder import audio
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
-
+import os
 
 class DatasetLog:
     """
@@ -52,10 +52,24 @@ class DatasetLog:
         
 def _init_preprocess_dataset(dataset_name, datasets_root, out_dir) -> (Path, DatasetLog):
     dataset_root = datasets_root.joinpath(dataset_name)
+    
+#    if not dataset_root.exists():
+#        print("Couldn\'t find %s, skipping this dataset." % dataset_root)
+#        return None, None
+    if dataset_name == 'VIVOS/wav16':
+        dataset_root = Path(os.path.join(dataset_root))
+        return dataset_root
+    if dataset_name == 'VCTK-Corpus/wav16':
+        dataset_root = Path(os.path.join(dataset_root))
+        return dataset_root
+    if dataset_name == 'vcc2018_training':
+        dataset_root = Path(os.path.join(dataset_root))
+        return dataset_root
     if not dataset_root.exists():
         print("Couldn\'t find %s, skipping this dataset." % dataset_root)
         return None, None
-    return dataset_root, DatasetLog(out_dir, dataset_name)
+    else:
+        return dataset_root, DatasetLog(out_dir, dataset_name)
 
 
 def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, extension,
@@ -65,7 +79,9 @@ def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir,
     # Function to preprocess utterances for one speaker
     def preprocess_speaker(speaker_dir: Path):
         # Give a name to the speaker that includes its dataset
-        speaker_name = "_".join(speaker_dir.relative_to(datasets_root).parts)
+        # speaker_name = "_".join(speaker_dir.relative_to(datasets_root).parts)
+        speaker_name = str(speaker_dir).split('/')[-1]
+        print('speaker name: ', speaker_dir)
         
         # Create an output directory with that name, as well as a txt file containing a 
         # reference to each source file.
@@ -89,7 +105,8 @@ def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir,
         for in_fpath in speaker_dir.glob("**/*.%s" % extension):
             # Check if the target output file already exists
             out_fname = "_".join(in_fpath.relative_to(speaker_dir).parts)
-            out_fname = out_fname.replace(".%s" % extension, ".npy")
+            out_fname = out_fname.replace(".%s" % extension, "_mel.npy")
+
             if skip_existing and out_fname in existing_fnames:
                 continue
                 
@@ -100,12 +117,13 @@ def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir,
             
             # Create the mel spectrogram, discard those that are too short
             frames = audio.wav_to_mel_spectrogram(wav)
+            
             if len(frames) < partials_n_frames:
                 continue
             
             out_fpath = speaker_out_dir.joinpath(out_fname)
+
             np.save(out_fpath, frames)
-            logger.add_sample(duration=len(wav) / sampling_rate)
             sources_file.write("%s,%s\n" % (out_fname, in_fpath))
         
         sources_file.close()
@@ -114,7 +132,6 @@ def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir,
     with ThreadPool(8) as pool:
         list(tqdm(pool.imap(preprocess_speaker, speaker_dirs), dataset_name, len(speaker_dirs),
                   unit="speakers"))
-    logger.finalize()
     print("Done preprocessing %s.\n" % dataset_name)
 
 
@@ -129,8 +146,67 @@ def preprocess_librispeech(datasets_root: Path, out_dir: Path, skip_existing=Fal
         speaker_dirs = list(dataset_root.glob("*"))
         _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "flac",
                                  skip_existing, logger)
+###################### Preprocessing VCTK-Corpus dataset ##############################################
+def preprocess_VCTK(datasets_root: Path, out_dir: Path, skip_existing=False):
 
+    # Initialize the preprocessing
+    dataset_name = "VCTK-Corpus/wav16"
+    #out_dir = '/home/ubuntu/VCTK-Corpus/new_encoder3/'
+    #out_dir = Path(out_dir)
+    dataset_root = _init_preprocess_dataset(dataset_name, datasets_root, out_dir)
+    if not dataset_root:
+        return
+    print("Preprocessing VCTK-Corpus Dataset")
+    print('Dataset root: ', dataset_root)
 
+    print('dataset root: ', dataset_root)
+    speaker_dirs = [Path(os.path.join(dataset_root,speaker_dir)) for speaker_dir in os.listdir(dataset_root)]
+
+    # Preprocess all speakers
+    _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "wav",
+                             skip_existing, logger=None)
+######################################################################
+def preprocess_VCC2018(datasets_root: Path, out_dir: Path, skip_existing=False):
+
+    # Initialize the preprocessing
+    dataset_name = "vcc2018_training"
+    dataset_root = _init_preprocess_dataset(dataset_name, datasets_root, out_dir)
+    if not dataset_root:
+        return
+    print("Preprocessing VCTK-Corpus Dataset")
+    print('Dataset root: ', dataset_root)
+
+    print('dataset root: ', dataset_root)
+    speaker_dirs = [Path(os.path.join(dataset_root,speaker_dir)) for speaker_dir in os.listdir(dataset_root)]
+    
+    # print("VoxCeleb1: found %d anglophone speakers on the disk, %d missing (this is normal)." % 
+    #       (len(speaker_dirs), len(keep_speaker_ids) - len(speaker_dirs)))
+
+    # Preprocess all speakers
+    _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "wav",
+                             skip_existing, logger=None)
+################################################################################################
+
+###################### Preprocessing VIVOS dataset #############################################
+def preprocess_VIVOS(datasets_root: Path, out_dir: Path, skip_existing=False):
+
+    # Initialize the preprocessing
+    dataset_name = "VIVOS/wav16"
+    #out_dir = '/home/ubuntu/VCTK-Corpus/new_encoder3/'
+    #out_dir = Path(out_dir)
+    dataset_root = _init_preprocess_dataset(dataset_name, datasets_root, out_dir)
+    if not dataset_root:
+        return
+    print("Preprocessing VIVOS Dataset")
+    print('Dataset root: ', dataset_root)
+
+    # print('dataset root: ', dataset_root)
+    speaker_dirs = [Path(os.path.join(dataset_root,speaker_dir)) for speaker_dir in os.listdir(dataset_root)]
+
+    # Preprocess all speakers
+    _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "wav",
+                             skip_existing, logger=None)
+################################################################################################
 def preprocess_voxceleb1(datasets_root: Path, out_dir: Path, skip_existing=False):
     # Initialize the preprocessing
     dataset_name = "VoxCeleb1"
@@ -149,10 +225,11 @@ def preprocess_voxceleb1(datasets_root: Path, out_dir: Path, skip_existing=False
     print("VoxCeleb1: using samples from %d (presumed anglophone) speakers out of %d." % 
           (len(keep_speaker_ids), len(nationalities)))
     
-    # Get the speaker directories for anglophone speakers only
+    #Get the speaker directories for anglophone speakers only
     speaker_dirs = dataset_root.joinpath("wav").glob("*")
     speaker_dirs = [speaker_dir for speaker_dir in speaker_dirs if
                     speaker_dir.name in keep_speaker_ids]
+    
     print("VoxCeleb1: found %d anglophone speakers on the disk, %d missing (this is normal)." % 
           (len(speaker_dirs), len(keep_speaker_ids) - len(speaker_dirs)))
 

@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List
-from preprocessing.encoder.data_objects.speaker import Speaker
+from encoder.data_objects.speaker import Speaker
 
 class SpeakerBatch:
     def __init__(self, speakers: List[Speaker], utterances_per_speaker: int, n_frames: int):
