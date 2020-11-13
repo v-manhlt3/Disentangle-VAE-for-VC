@@ -22,9 +22,9 @@ pretrained model can be downloaded in this [link](https://drive.google.com/file/
 # Prepare data for training
 
 1. Download and uncompress VCTK dataset.
-2. Move extracted dataset in ``/home/ubuntu.
+2. Move extracted dataset in ``/home/ubuntu``.
 3. Go into ``preprocessing`` directory.
-4. run command: ``python dataset_preprocess.py /home/ubuntu/ -o [output directory] -d VCTK --no_trim
+4. run command: ``python dataset_preprocess.py /home/ubuntu/ -o [output directory] -d VCTK --no_trim``
 
 # Usage
 
