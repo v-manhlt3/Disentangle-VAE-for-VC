@@ -65,6 +65,9 @@ def _init_preprocess_dataset(dataset_name, datasets_root, out_dir) -> (Path, Dat
     if dataset_name == 'vcc2018_training':
         dataset_root = Path(os.path.join(dataset_root))
         return dataset_root
+    if dataset_name == 'zalo_dataset':
+        dataset_root = Path(os.path.join(dataset_root))
+        return dataset_root
     if not dataset_root.exists():
         print("Couldn\'t find %s, skipping this dataset." % dataset_root)
         return None, None
@@ -81,7 +84,7 @@ def _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir,
         # Give a name to the speaker that includes its dataset
         # speaker_name = "_".join(speaker_dir.relative_to(datasets_root).parts)
         speaker_name = str(speaker_dir).split('/')[-1]
-        print('speaker name: ', speaker_dir)
+        # print('speaker name: ', speaker_dir)
         
         # Create an output directory with that name, as well as a txt file containing a 
         # reference to each source file.
@@ -160,6 +163,26 @@ def preprocess_VCTK(datasets_root: Path, out_dir: Path, skip_existing=False):
     print('Dataset root: ', dataset_root)
 
     print('dataset root: ', dataset_root)
+    speaker_dirs = [Path(os.path.join(dataset_root,speaker_dir)) for speaker_dir in os.listdir(dataset_root)]
+
+    # Preprocess all speakers
+    _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "wav",
+                             skip_existing, logger=None)
+
+def preprocess_zalodataset(datasets_root: Path, out_dir: Path, skip_existing=False):
+
+    # Initialize the preprocessing
+    dataset_name = "zalo_dataset"
+    #out_dir = '/home/ubuntu/VCTK-Corpus/new_encoder3/'
+    #out_dir = Path(out_dir)
+    dataset_root = _init_preprocess_dataset(dataset_name, datasets_root, out_dir)
+    if not dataset_root:
+        return
+    print("Preprocessing Zalo Dataset")
+    # print('Dataset root: ', dataset_root)
+
+    print('dataset root zalo: ', dataset_root)
+    # dataset_root = dataset_root.path
     speaker_dirs = [Path(os.path.join(dataset_root,speaker_dir)) for speaker_dir in os.listdir(dataset_root)]
 
     # Preprocess all speakers

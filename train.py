@@ -14,10 +14,8 @@ def get_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch-size', type=int, default=2, metavar='BS',
                         help='input batch size for training (default: 32)')
-    # Hidden size for CelebA: 2000 dimensions, 2 layers
     parser.add_argument('--hidden-size', type=str, default='400', metavar='HS',
                         help='hidden sizes, separated by commas (default: 400)')
-    # Latent size for CelebA: 800 dimensions
     parser.add_argument('--speaker_size', type=int, default=4, metavar='LS',
                         help='number of latent dimensions (default: 200)')
     parser.add_argument('--latent-size', type=int, default=32, metavar='LS',
@@ -28,8 +26,7 @@ def get_parse():
                         help='number of epochs to train (default: 11)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='enables CUDA training')
-    parser.add_argument('--dataset', default='mnist',
-                        help='dataset [mnist, fashion, celeba]')
+    parser.add_argument('--dataset', default='VCTK')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=500, metavar='LOG',
@@ -73,6 +70,10 @@ if __name__=='__main__':
     parse.add_argument('--alpha', default=0.01, type=float, metavar='A') # alpha = 0.5 achieve quite good results
     parse.add_argument('--dataset_fp', default='/home/ubuntu/vcc2016_train', type=str)
     parse.add_argument('--log_dir', default='results', type=str)
+    parse.add_argument('--src_spk', default='p225', type=str)
+    parse.add_argument('--trg_spk', default='p226', type=str)
+    parse.add_argument('--train', type='store_true', default=False)
+    parse.add_argument('--convert', type='store_true', default=False)
     # parse.add_argument('--gamma', default=6.4, type=float)
     args = parse.parse_args()
 
@@ -85,12 +86,7 @@ if __name__=='__main__':
     # print('batch size shape: ', next(iter(train_loader))[1].shape)
     if not os.path.exists('../' + args.log_dir):
         os.mkdir('../' + args.log_dir)
-    ## MulVAEs using ACVAEs architecture
-    # vsc = ConvolutionalGVAE(args.dataset, 64, 80,
-    #                       args.latent_size, args.lr,
-    #                       args.alpha, args.log_interval, args.normalize,
-    #                       latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size)
-    #### GVAE using Autovc architecture
+
     config = vars(args)
     with open('../'+args.log_dir + '/config.json', 'w') as fp:
         json.dump(config, fp, indent=4)
@@ -102,15 +98,16 @@ if __name__=='__main__':
                           latent_dim=args.latent_size, beta=args.beta_cof, batch_size=args.batch_size,
                           mse_cof=args.mse_cof, kl_cof=args.kl_cof, style_cof=args.style_cof)
     
+    if args.train:
+        vsc.run_training(train_loader, train_loader, args.epochs,
+                    args.report_interval, args.sample_size, reload_model=True,
+                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
-    # vsc.run_training(train_loader, train_loader, args.epochs,
-    #                 args.report_interval, args.sample_size, reload_model=True,
-    #                 checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-    #                 logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
-
-    # vsc.estimate_trained_model(test_loader)
-    vsc.voice_conversion_mel(ckp_path='../'+args.log_dir+'/checkpoints',
-                    generation_dir='../'+args.log_dir+'/generation/')
+    if args.convert:
+        vsc.voice_conversion_mel(ckp_path='../'+args.log_dir+'/checkpoints',
+                    generation_dir='../'+args.log_dir+'/generation/',
+                    src_spk=args.src_spk, trg_spk=args.trg_spk)
 
     # vsc.analyze_latent_code(speaker_id='VCTK-Corpus_wav16_p225', ckp_path='../'+args.log_dir+'/checkpoints',
     #                         estimation_dir='../'+args.log_dir+'/analysis', dataset=dataset, utterance='p225_019.npy')

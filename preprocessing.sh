@@ -1,0 +1,1 @@
+python dataset_preprocess.py /home/ubuntu/ -o /home/ubuntu/testttt_VCTK -d VCTK --no_trim

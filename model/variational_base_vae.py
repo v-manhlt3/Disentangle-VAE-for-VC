@@ -129,7 +129,8 @@ class VariationalBaseModelVAE():
         model_ids = []
         for f in models:
             run_name = Path(f).stem
-            model_name, dataset, _, _, latent_sz, _, epoch = run_name.split('_')
+            # model_name, dataset, _, _, latent_sz, _, epoch = run_name.split('_')
+            model_name, dataset, epoch = run_name.split('_')
             print('-------current epoch: ', epoch)
             model_ids.append((int(epoch), f))
         
@@ -167,8 +168,7 @@ class VariationalBaseModelVAE():
         else:
             start_epoch = 1
         name = self.model.__class__.__name__
-        run_name = f'{'DisentangledVAE'}_{'VCTK'}_{start_epoch}_{epochs}_' \
-                   f'{self.latent_sz}_{str(self.lr).replace(".", "-")}'
+        run_name = f'{'DisentangledVAE'}_{'VCTK'}'.replace(".", "-")}'
         writer = SummaryWriter(f'{logs_path}/{run_name}')
         for epoch in range(start_epoch, start_epoch + epochs):
             print('kl coef: ', self.kl_cof)
