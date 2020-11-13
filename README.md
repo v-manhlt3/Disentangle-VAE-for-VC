@@ -31,6 +31,6 @@ pretrained model can be downloaded in this [link](https://drive.google.com/file/
 To train the model run the following command:
 ``python train.py --dataset_fp=[output directory] --latent-size=32 --log_dir=./log --epochs=2000 --report-interval=100 --lr=1e-4 --samples_length=64 --batch-size=16 --kl_cof=1.0 --mse_cof=1.0 --speaker_size=4 --train``
 
-To convert voice from source to target using pretrained model. First, copy pretrained model to folder ``./log/checkpoints`` and then run the following command:
+To convert voice from source to target using pretrained model. First, copy the pretrained model to folder ``./log/checkpoints`` and then run the following command:
 
 ``python train_acvae.py --dataset_fp=[output directory] --latent-size=32 --speaker_size=4 --log_dir=.log/``
