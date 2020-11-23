@@ -11,13 +11,15 @@ We use VCTK-Corpus to train and estimate our proposed model, VCTK dataset can be
 # Pretrained model:
 
 pretrained model can be downloaded in this [link](https://drive.google.com/file/d/1ScmvAWGk9mDTvkrp7pnRCd_YCS3JuDMU/view?usp=sharing)
+Wavenet Vocoder: [link](https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi_6i7zi4nQ/view?usp=sharing)
 
 # Requirements:
 
-- Python 3.6 or newer
-- Pytorch 1.4 or newer
-- librosa
-- tensorboardX
+- Python 3.6 or newer.
+- Pytorch 1.4 or newer.
+- librosa.
+- tensorboardX.
+- wavenet_vocoder pip install wavenet_vocoder
 
 # Prepare data for training
 
