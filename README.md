@@ -19,7 +19,7 @@ Wavenet Vocoder: [link](https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi
 - Pytorch 1.4 or newer.
 - librosa.
 - tensorboardX.
-- wavenet_vocoder pip install wavenet_vocoder
+- wavenet_vocoder ``pip install wavenet_vocoder``
 
 # Prepare data for training
 
@@ -35,4 +35,7 @@ To train the model run the following command:
 
 To convert voice from source to target using pretrained model. First, copy the pretrained model to folder ``./log/checkpoints`` and then run the following command:
 
-``python train_acvae.py --dataset_fp=[output directory] --latent-size=32 --speaker_size=4 --log_dir=.log/``
+1. Download pretrained model of Wavenet_vocoder
+2. cd [pretrained model path]
+3. cp checkpoint_step001000000_ema.pth /home/ubuntu/
+4. run command ``python train_acvae.py --dataset_fp=[output directory] --latent-size=32 --speaker_size=4 --log_dir=.log/``
