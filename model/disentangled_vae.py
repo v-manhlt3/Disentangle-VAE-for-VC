@@ -6,8 +6,9 @@ from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn import functional as F 
 # from sparse_encoding.variational_base_mulvae_model import VariationalBaseModel
-from sparse_encoding.variational_base_acvae import VariationalBaseModelGVAE
+# from sparse_encoding.variational_base_acvae import VariationalBaseModelGVAE
 # from variational_base_acvae import VariationalBaseModelGVAE
+from model.variational_base_vae import VariationalBaseModelVAE
 import timeit
 # from sparse_encoding import utils
 from torch.autograd import Variable
@@ -131,7 +132,7 @@ class DisentangledVAE(nn.Module):
                 beta: float = 0.1,
                 beta_delta: float = 0,
                 dim_neck=64, latent_dim=64, dim_pre=512, batch_size=10):
-        super(MulVAE, self).__init__()
+        super(DisentangledVAE, self).__init__()
 
         self.batch_size = batch_size
         self._input_sz = input_sz

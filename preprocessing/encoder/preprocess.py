@@ -62,7 +62,7 @@ def _init_preprocess_dataset(dataset_name, datasets_root, out_dir) -> (Path, Dat
     if dataset_name == 'VCTK-Corpus/wav16':
         dataset_root = Path(os.path.join(dataset_root))
         return dataset_root
-    if dataset_name == 'vcc2018_training':
+    if dataset_name == 'vcc2020_dataset/target_task1':
         dataset_root = Path(os.path.join(dataset_root))
         return dataset_root
     if dataset_name == 'zalo_dataset':
@@ -189,14 +189,14 @@ def preprocess_zalodataset(datasets_root: Path, out_dir: Path, skip_existing=Fal
     _preprocess_speaker_dirs(speaker_dirs, dataset_name, datasets_root, out_dir, "wav",
                              skip_existing, logger=None)
 ######################################################################
-def preprocess_VCC2018(datasets_root: Path, out_dir: Path, skip_existing=False):
+def preprocess_VCC2020(datasets_root: Path, out_dir: Path, skip_existing=False):
 
     # Initialize the preprocessing
-    dataset_name = "vcc2018_training"
+    dataset_name = "vcc2020_dataset/target_task1"
     dataset_root = _init_preprocess_dataset(dataset_name, datasets_root, out_dir)
     if not dataset_root:
         return
-    print("Preprocessing VCTK-Corpus Dataset")
+    print("Preprocessing vcc2020 Dataset")
     print('Dataset root: ', dataset_root)
 
     print('dataset root: ', dataset_root)

@@ -1,13 +1,13 @@
 import torch
 import numpy as np 
-from sparse_encoding.conv_vae import ConvolutionalVSC
-from sparse_encoding.conv_mulvae_mel import ConvolutionalMulVAE
+# from model.variational_base_vae import ConvolutionalVSC
+from model.disentangled_vae import ConvolutionalMulVAE
 # from sparse_encoding.acvae import ConvolutionalGVAE
 import argparse, os
-from preprocessing.dataset_mel import SpeechDatasetMCC2, SpeechDatasetGVAE
+from preprocessing.dataset import SpeechDatasetMCC2, SpeechDatasetGVAE
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from sparse_encoding.train_feature_selection import train_fs
+# from sparse_encoding.train_feature_selection import train_fs
 import json
 
 def get_parse():
@@ -57,11 +57,11 @@ def get_dataset(dataset_fp, batch_size, num_utt, shuffle_dataset=True):
     
     return train_loader, dataset
 
-def train_feature_selection(vsc, dataloader, args):
+# def train_feature_selection(vsc, dataloader, args):
 
-    num_hidden_layers = 2
-    batch_size = 32
-    train_fs(vsc, dataloader, args.lr, save_path='../VC_logs/results_Autovc_512_16/fs_ckp/', load_model=True)
+#     num_hidden_layers = 2
+#     batch_size = 32
+#     train_fs(vsc, dataloader, args.lr, save_path='../VC_logs/results_Autovc_512_16/fs_ckp/', load_model=True)
 
 
 if __name__=='__main__':
@@ -69,11 +69,11 @@ if __name__=='__main__':
 
     parse.add_argument('--alpha', default=0.01, type=float, metavar='A') # alpha = 0.5 achieve quite good results
     parse.add_argument('--dataset_fp', default='/home/ubuntu/vcc2016_train', type=str)
-    parse.add_argument('--log_dir', default='results', type=str)
-    parse.add_argument('--src_spk', default='p225', type=str)
-    parse.add_argument('--trg_spk', default='p226', type=str)
-    parse.add_argument('--train', type='store_true', default=False)
-    parse.add_argument('--convert', type='store_true', default=False)
+    parse.add_argument('--log_dir', default='vcc2020_results', type=str)
+    parse.add_argument('--src_spk', default='VCTK-Corpus_wav16_p225', type=str)
+    parse.add_argument('--trg_spk', default='VCTK-Corpus_wav16_p226', type=str)
+    parse.add_argument('--train', type=bool, default=False)
+    parse.add_argument('--convert', type=bool, default=False)
     # parse.add_argument('--gamma', default=6.4, type=float)
     args = parse.parse_args()
 
@@ -102,12 +102,15 @@ if __name__=='__main__':
         vsc.run_training(train_loader, train_loader, args.epochs,
                     args.report_interval, args.sample_size, reload_model=True,
                     checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
-                    logs_path='../'+args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
+                    logs_path=args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
+    list_cv = [("SEF1","SEM1"),("SEM2", "SEM1"),("SEF2","SEF1"),("SEM1", "SEF2")]
     if args.convert:
-        vsc.voice_conversion_mel(ckp_path='../'+args.log_dir+'/checkpoints',
+        for (src_spk, trg_spk) in list_cv:
+            vsc.voice_conversion_mel(ckp_path='../vcc2020_results/checkpoints',
                     generation_dir='../'+args.log_dir+'/generation/',
-                    src_spk=args.src_spk, trg_spk=args.trg_spk)
+                    src_spk=src_spk, trg_spk=trg_spk,
+                    dataset_fp=args.dataset_fp)
 
     # vsc.analyze_latent_code(speaker_id='VCTK-Corpus_wav16_p225', ckp_path='../'+args.log_dir+'/checkpoints',
     #                         estimation_dir='../'+args.log_dir+'/analysis', dataset=dataset, utterance='p225_019.npy')

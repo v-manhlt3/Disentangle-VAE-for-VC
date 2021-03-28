@@ -1,4 +1,4 @@
-from encoder.preprocess import preprocess_librispeech, preprocess_voxceleb1, preprocess_voxceleb2, preprocess_VCTK, preprocess_VIVOS, preprocess_VCC2018, preprocess_zalodataset
+from encoder.preprocess import preprocess_librispeech, preprocess_voxceleb1, preprocess_voxceleb2, preprocess_VCTK, preprocess_VIVOS, preprocess_VCC2020, preprocess_zalodataset
 from pathlib import Path
 import argparse
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         "voxceleb2": preprocess_voxceleb2,
         "VCTK": preprocess_VCTK,
         "VIVOS": preprocess_VIVOS,
-        "vcc2018": preprocess_VCC2018,
+        "vcc2020": preprocess_VCC2020,
         "zalo_dataset": preprocess_zalodataset
     }
     args = vars(args)

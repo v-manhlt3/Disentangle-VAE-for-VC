@@ -2,17 +2,18 @@ import torch
 from torchvision.utils import save_image
 from pathlib import Path
 from glob import glob
-import pandas as pd
+# import pandas as pd
 from tqdm import tqdm
 import os
 import matplotlib.pyplot as plt
 import librosa.display
-from model.logger import Logger
+# from model.logger import Logger
 from model.plot import *
-from model.train_feature_selection import feature_selection
-from model.feature_selection import FeatureSelection
+# from model.train_feature_selection import feature_selection
+# from model.feature_selection import FeatureSelection
 from model import utils
-from model import disentangled_vae
+# from model import disentangled_vae
+import soundfile as sf
 
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
@@ -168,7 +169,8 @@ class VariationalBaseModelVAE():
         else:
             start_epoch = 1
         name = self.model.__class__.__name__
-        run_name = f'{'DisentangledVAE'}_{'VCTK'}'.replace(".", "-")}'
+        # run_name = f'{'DisentangledVAE'}_{'VCTK'}'.replace(".", "-")}'
+        run_name = "DisentangledVAE_VCTK".replace(".","-")
         writer = SummaryWriter(f'{logs_path}/{run_name}')
         for epoch in range(start_epoch, start_epoch + epochs):
             print('kl coef: ', self.kl_cof)
@@ -216,10 +218,11 @@ class VariationalBaseModelVAE():
             _,_,recons_x1, recons_x2, _, _, _,_,_,_ = \
             self.model(data1, data2,train=False)
             
-            for i in range(10):
+            for i in range(5):
 
                 original_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_original_mel_' +str(i)+'.png')
                 recons_mel_fp = os.path.join(estimation_dir, str(logging_epoch) + '_recons_mel_' +str(i)+'.png')
+                # print("recons x1: ", recons_x1[i])
                 recons_mel = recons_x1[i]
                 origin_mel = data1[i]
 
@@ -248,24 +251,28 @@ class VariationalBaseModelVAE():
         epoch = self.load_last_model(ckp_path, logging_func=print)
         self.model.eval()
         vocoder_model = build_model().to(device)
-        ckpt = torch.load('/home/ubuntu/checkpoint_step001000000_ema.pth')
+        ckpt = torch.load('checkpoint_step001000000_ema.pth')
         vocoder_model.load_state_dict(ckpt['state_dict'])
         #################################################################################
         source_utt_fp = glob(os.path.join(dataset_fp, src_spk, "*.npy"))
+        print("----------"+os.path.join(dataset_fp, src_spk))
         source_utt_fp = np.sort(source_utt_fp)
+
         target_utt_fp = glob(os.path.join(dataset_fp, trg_spk, '*.npy'))
+        # target_utt_fp = glob(os.path.join("/root/vcc2020_testing_DisVAE/", trg_spk, '*.npy'))
         print('--------------- len: ', len(source_utt_fp))
-        # for i in range(10):
-        for utt_fp in source_utt_fp:
+        for i in range(2):
+        # for utt_fp in source_utt_fp:
             
             source_mel = np.load(source_utt_fp[i])
+            # print()
             source_mel = chunking_mel(source_mel).cuda().float()
             rnd_trg = np.random.choice(len(target_utt_fp), 1)[0]
             target_mel = np.load(target_utt_fp[rnd_trg])
             target_mel = chunking_mel(target_mel).cuda().float()
 
             
-            utterance_id = source_utt_fp[i].split('/')[-1].split('.')[0].split("_")[-1]
+            utterance_id = source_utt_fp[i].split('/')[-1].split('.')[0].split("_")[-2]
             print('convert utterance: {} from --->{} to --->{}'.format(utterance_id, src_spk, trg_spk))
             with torch.no_grad():
                 src_style_mu, src_style_logvar, src_content_mu, src_content_logvar = self.model.encode(source_mel)
@@ -316,9 +323,11 @@ class VariationalBaseModelVAE():
                 source_mel = np.transpose(source_mel, (-1, -2))
 
                 waveform = wavegen(vocoder_model, converted_voice)
+                
+                # sf.write('stereo_file.flac', data, samplerate, format='flac', subtype='PCM_24')
 
-                librosa.output.write_wav(os.path.join(save_dir,
-                'convert_'+source_speaker+'_to_'+target_speaker+'_'+utterance_id.split('.')[0]+'.wav'), waveform, sr=16000)
+                sf.write(os.path.join(save_dir,
+                'convert_'+source_speaker+'_to_'+target_speaker+'_'+utterance_id.split('.')[0]+'.wav'), waveform, 16000)
                 
 
 

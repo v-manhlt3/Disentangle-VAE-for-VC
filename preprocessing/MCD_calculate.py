@@ -53,16 +53,25 @@ def evaluate_mcd(source_spk, target_spk, file_path1, file_path2):
     return MCD_array
 
 def evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2):
+    """ 
+    file_path2: conversion file dir 
+    file_path1: source file dir
+    """
 
     MCD_array = []
-    utt_list = [utt for utt in os.listdir(os.path.join(file_path2, source_spk))]
+    # utt_list = [utt for utt in os.listdir(os.path.join(file_path2, "cvt_"+source_spk+"_"+target_spk))]
+    utt_list = glob(os.path.join(file_path2, target_spk,"*.wav"))
+
     print('utt list: ', utt_list)
     print('sorted utt list: ', sorted(utt_list))
     for utt in utt_list:
-        utt_id = utt.split('_')[-1].split('.')[0]
+        # utt_id = utt.split('_')[-1].split('.')[0]
         # read source features , target features and converted mcc
-        src_data,_ = librosa.load(os.path.join(file_path2, source_spk, 'spk0_gsb_'+utt_id+ '.wav'), sr=16000)
-        trg_data,_ = librosa.load(os.path.join(file_path1, target_spk, utt_id + '.wav'), sr=16000)
+        # src_data,_ = librosa.load(os.path.join(file_path1, target_spk, target_spk+'_'+utt_id+ '.wav'), sr=16000)
+        # trg_data,_ = librosa.load(os.path.join(file_path2, "cvt_"+source_spk+'_'+target_spk, source_spk +'_to_'+target_spk+'_'+utt_id + '.wav'), sr=16000)
+        utt_name = utt.split("/")[-1].split("_cv")[0] + ".wav"
+        src_data,_ = librosa.load(os.path.join(file_path1, source_spk,utt_name), sr=16000)
+        trg_data,_ = librosa.load(utt, sr=16000)
 
         src_f0, src_mcc = get_feature(src_data)
         trg_f0, trg_mcc = get_feature(trg_data)
@@ -85,7 +94,7 @@ def evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2):
         diff2sum = np.sum((cvt_mcc_dtw - trg_mcc_dtw)**2, 1)
         mcd = np.mean(10.0 / np.log(10.0) * np.sqrt(2 * diff2sum), 0)
         # logging.info('{} {}'.format(basename, mcd))
-        print('utterance {} mcd: {}'.format(utt_id, mcd))
+        print('utterance {} mcd: {}'.format(utt_name, mcd))
         MCD_array.append(mcd)
 
     return MCD_array
@@ -93,17 +102,17 @@ def evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2):
 
 if __name__ =='__main__':
     
-    source_spk = 'SF1_to_SF2'
+    source_spk = 'SEM2'
     # source_spk = 'VCC2SF1'
-    target_spk = 'VCC2SF2'
-    file_path1 = '/home/ubuntu/vcc2018_training/'
+    target_spk = 'SEM2-SEF2_test'
+    root_dir = "../MCD_estimate/CycleVAE"
+    file_path1 = os.path.join(root_dir, "origin")
     # file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
     # file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
-    # convert fp
     # file_path2 = '/vinai/manhlt/icassp-20/icassp-20/baseline_VC/StarGAN-Voice-Conversion-2/Stargan_log/sample_dir'
     # file_path2 = '/home/ubuntu/ACVAE_VC/'
     # file_path2 = '/vinai/manhlt/icassp-20/icassp-20/VC_logs3/VCC2018_gvae_mcc_32_128_beta0.1/evaluation/mcep'
-    file_path2 = '/home/ubuntu/GLE_exp/'
+    file_path2 = os.path.join(root_dir, "conversion")
 
     MCD_arr = evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2)
 
