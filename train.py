@@ -68,8 +68,8 @@ if __name__=='__main__':
     parse = get_parse()
 
     parse.add_argument('--alpha', default=0.01, type=float, metavar='A') # alpha = 0.5 achieve quite good results
-    parse.add_argument('--dataset_fp', default='/home/ubuntu/vcc2016_train', type=str)
-    parse.add_argument('--log_dir', default='vcc2020_results', type=str)
+    parse.add_argument('--dataset_fp', default='/root/VCTK-Corpus/Autovc-known-speakers', type=str)
+    parse.add_argument('--log_dir', default='./results', type=str)
     parse.add_argument('--src_spk', default='VCTK-Corpus_wav16_p225', type=str)
     parse.add_argument('--trg_spk', default='VCTK-Corpus_wav16_p226', type=str)
     parse.add_argument('--train', type=bool, default=False)
@@ -104,11 +104,11 @@ if __name__=='__main__':
                     checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
                     logs_path=args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
-    list_cv = [("SEF1","SEM1"),("SEM2", "SEM1"),("SEF2","SEF1"),("SEM1", "SEF2")]
+    list_cv = [("VCTK-Corpus_wav16_p226","VCTK-Corpus_wav16_p225")]
     if args.convert:
         for (src_spk, trg_spk) in list_cv:
-            vsc.voice_conversion_mel(ckp_path='../vcc2020_results/checkpoints',
-                    generation_dir='../'+args.log_dir+'/generation/',
+            vsc.voice_conversion_mel(ckp_path='./checkpoints/',
+                    generation_dir=args.log_dir+'/generation/',
                     src_spk=src_spk, trg_spk=trg_spk,
                     dataset_fp=args.dataset_fp)
 

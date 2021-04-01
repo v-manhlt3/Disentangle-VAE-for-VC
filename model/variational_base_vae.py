@@ -293,7 +293,7 @@ class VariationalBaseModelVAE():
                 converted_mel = converted_mel + converted_mel_hat
 
                 converted_voice = torch.cat([converted_mel[i] for i in range(converted_mel.shape[0])], 1)
-                converted_voice = converted_voice.cpu().detach().numpy()
+                converted_voice = torch.clamp(converted_voice, min=0, max=1.0).cpu().detach().numpy()
 
                 source_mel = torch.cat([source_mel[i] for i in range(source_mel.shape[0])], 1)
                 source_mel = source_mel.cpu().detach().numpy()
