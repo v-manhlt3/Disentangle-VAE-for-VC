@@ -95,14 +95,14 @@ if __name__=='__main__':
     if args.train:
         vsc.run_training(train_loader, train_loader, args.epochs,
                     args.report_interval, args.sample_size, reload_model=True,
-                    checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
+                    checkpoints_path=args.log_dir+'/checkpoints', images_path=args.log_dir+'/images',
                     logs_path=args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
     # list_cv = [("VCTK-Corpus_wav16_p226","VCTK-Corpus_wav16_p225")]
 
     if args.convert:
 
-        vsc.voice_conversion_mel(ckp_path='./checkpoints/',
+        vsc.voice_conversion_mel(ckp_path=args.logdir + './checkpoints/',
                     generation_dir=args.log_dir+'/generation/',
                     src_spk=args.src_spk, trg_spk=args.trg_spk,
                     dataset_fp=args.dataset_fp)
