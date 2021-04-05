@@ -2,7 +2,7 @@
 
 Code repository for paper [link](link)
 
-Manh Luong, Viet Anh Tran under review in ICASSP 2021
+Manh Luong, Viet Anh Tran under review in INTERSPEECH 2021
 
 # Dataset:
 
@@ -10,7 +10,7 @@ We use VCTK-Corpus to train and estimate our proposed model, VCTK dataset can be
 
 # Pretrained model:
 
-pretrained model can be downloaded in this [link](https://drive.google.com/file/d/1ScmvAWGk9mDTvkrp7pnRCd_YCS3JuDMU/view?usp=sharing)
+pretrained model can be downloaded in this [link](https://drive.google.com/file/d/1TixHkqxPPRfxONraNJiTnZU9vcHwy9F4/view?usp=sharing)
 Wavenet Vocoder: [link](https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi_6i7zi4nQ/view?usp=sharing)
 
 # Requirements:
@@ -24,18 +24,21 @@ Wavenet Vocoder: [link](https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi
 # Prepare data for training
 
 1. Download and uncompress VCTK dataset.
-2. Move extracted dataset in ``/home/ubuntu``.
-3. Go into ``preprocessing`` directory.
-4. run command: ``python dataset_preprocess.py /home/ubuntu/ -o [output directory] -d VCTK --no_trim``
+2. Move extracted dataset in ``[home directory]``.
+3. run command: ``export HOME=[home directory]``
+4. run command: ``bash preprocessing.sh``.
 
 # Usage
 
 To train the model run the following command:
-``python train.py --dataset_fp=[output directory] --latent-size=32 --log_dir=./log --epochs=2000 --report-interval=100 --lr=1e-4 --samples_length=64 --batch-size=16 --kl_cof=1.0 --mse_cof=1.0 --speaker_size=4 --train``
+``bash training.sh``
 
-To convert voice from source to target using pretrained model. First, copy the pretrained model to folder ``./log/checkpoints`` and then run the following command:
+To convert voice from source to target using pretrained model. Run the follwoing commands:
 
-1. Download pretrained model of Wavenet_vocoder
-2. cd [pretrained model path]
-3. cp checkpoint_step001000000_ema.pth /home/ubuntu/
-4. run command ``python train_acvae.py --dataset_fp=[output directory] --latent-size=32 --speaker_size=4 --log_dir=.log/``
+1. cd [Disentangled-VAE directory]
+2. mkdir ./results/checkpoints
+3. cp [your downloaded checkpoint] ./results/checkpoints/
+4. Download pretrained model of Wavenet_vocoder
+5. cp [downloaded Wavenet_Vocoder]/checkpoint_step001000000_ema.pth [Disentangled-VAE directory]
+6. edit two variables: ``src_spk`` and ``trg_spk`` in file conversion.sh to your source and target speaker, respectively.
+7. run command: ``bash conversion.sh``
