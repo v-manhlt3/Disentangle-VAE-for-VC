@@ -57,11 +57,6 @@ def get_dataset(dataset_fp, batch_size, num_utt, shuffle_dataset=True):
     
     return train_loader, dataset
 
-# def train_feature_selection(vsc, dataloader, args):
-
-#     num_hidden_layers = 2
-#     batch_size = 32
-#     train_fs(vsc, dataloader, args.lr, save_path='../VC_logs/results_Autovc_512_16/fs_ckp/', load_model=True)
 
 
 if __name__=='__main__':
@@ -83,7 +78,6 @@ if __name__=='__main__':
 
     train_loader, dataset = get_dataset(args.dataset_fp, batch_size=args.batch_size, num_utt=40)
 
-    # print('batch size shape: ', next(iter(train_loader))[1].shape)
     if not os.path.exists('../' + args.log_dir):
         os.mkdir('../' + args.log_dir)
 
@@ -104,40 +98,11 @@ if __name__=='__main__':
                     checkpoints_path='../'+args.log_dir+'/checkpoints', images_path='../'+args.log_dir+'/images',
                     logs_path=args.log_dir+'/logs', estimation_dir='../'+args.log_dir+'/images/estimation')
 
-    list_cv = [("VCTK-Corpus_wav16_p226","VCTK-Corpus_wav16_p225")]
+    # list_cv = [("VCTK-Corpus_wav16_p226","VCTK-Corpus_wav16_p225")]
+
     if args.convert:
-        for (src_spk, trg_spk) in list_cv:
-            vsc.voice_conversion_mel(ckp_path='./checkpoints/',
+
+        vsc.voice_conversion_mel(ckp_path='./checkpoints/',
                     generation_dir=args.log_dir+'/generation/',
-                    src_spk=src_spk, trg_spk=trg_spk,
+                    src_spk=args.src_spk, trg_spk=args.trg_spk,
                     dataset_fp=args.dataset_fp)
-
-    # vsc.analyze_latent_code(speaker_id='VCTK-Corpus_wav16_p225', ckp_path='../'+args.log_dir+'/checkpoints',
-    #                         estimation_dir='../'+args.log_dir+'/analysis', dataset=dataset, utterance='p225_019.npy')
-
-    # wav_fp = '/home/ubuntu/VCTK-Corpus/wav16/p227/p227_004.wav'
-
-    # vsc.voice_conversion_mcc(target_spk='p225', source_spk='p227',
-    #                     source_utt='p227_004.npz', target_utt='p225_004.npz',wav_fp=wav_fp,dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                     generation_dir='../'+args.log_dir+'/generation')
-
-    # wav_fp = '/home/ubuntu/vcc2016_training/SM1/100003.wav'
-
-    # vsc.voice_conversion_mcc(target_spk='SF3', source_spk='SM1',
-    #                     source_utt='100003.npz', target_utt='100001.npz',wav_fp=wav_fp,dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                     generation_dir='../'+args.log_dir+'/generation2')
-
-    # vsc.voice_conversion2(target_speaker='vcc2016_training_SM1', source_speaker='vcc2016_training_SF2',
-    #                     source_utt='100001.npy', target_utt='100003.npy',dataset=dataset, ckp_path='../'+args.log_dir+'/checkpoints',
-    #                     generation_dir='../'+args.log_dir+'/generation')
-
-    # target_utt = '/home/ubuntu/vcc2016_train/vcc2016_training_SM1/100025.npy'
-    # source_utt = '/home/ubuntu/vcc2016_train/vcc2016_training_SF1/100002.npy'
-    # vsc.voice_conversion3(target_utterance=target_utt, source_utterance=source_utt, dataset=dataset,
-    #                      ckp_path='../'+args.log_dir+'/checkpoints', generation_dir='../'+args.log_dir+'/generation4')
-
-    # vsc.load_last_model(checkpoints_path='../'+args.log_dir+'/checkpoints')
-    # train_feature_selection(vsc, train_loader, args)
-
-    # vsc.vc_evaluation('VCC2SM1', 'VCC2SF1', evaluation_fp='../'+args.log_dir+'/evaluation',
-    #                  ckp_path='../'+args.log_dir+'/checkpoints',dataset_fp=args.dataset_fp)

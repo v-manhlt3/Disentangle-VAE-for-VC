@@ -8,7 +8,6 @@ import sys
 
 from fastdtw import fastdtw
 from glob import glob
-# from preprocessing import WORLD_processing
 import librosa
 from WORLD_processing import *
 import scipy.spatial
@@ -78,9 +77,8 @@ def evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2):
 
         # non-silence parts
         trg_idx = np.where(trg_f0>0)[0]
-        # print('trg idx: ', trg_idx)
         trg_mcc = trg_mcc[trg_idx,:24]
-        # print('trg_mcc shape: ', trg_mcc.shape)
+        
         src_idx = np.where(src_f0>0)[0]
         src_mcc = src_mcc[src_idx,:24]
 
@@ -107,11 +105,6 @@ if __name__ =='__main__':
     target_spk = 'SEM2-SEF2_test'
     root_dir = "../MCD_estimate/CycleVAE"
     file_path1 = os.path.join(root_dir, "origin")
-    # file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
-    # file_path1 = '/home/ubuntu/vcc2018_WORLD_dataset/'
-    # file_path2 = '/vinai/manhlt/icassp-20/icassp-20/baseline_VC/StarGAN-Voice-Conversion-2/Stargan_log/sample_dir'
-    # file_path2 = '/home/ubuntu/ACVAE_VC/'
-    # file_path2 = '/vinai/manhlt/icassp-20/icassp-20/VC_logs3/VCC2018_gvae_mcc_32_128_beta0.1/evaluation/mcep'
     file_path2 = os.path.join(root_dir, "conversion")
 
     MCD_arr = evaluate_mcd_wav(source_spk, target_spk, file_path1, file_path2)
