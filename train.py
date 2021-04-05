@@ -102,7 +102,7 @@ if __name__=='__main__':
 
     if args.convert:
 
-        vsc.voice_conversion_mel(ckp_path=args.logdir + './checkpoints/',
+        vsc.voice_conversion_mel(ckp_path=args.log_dir + '/checkpoints/',
                     generation_dir=args.log_dir+'/generation/',
                     src_spk=args.src_spk, trg_spk=args.trg_spk,
                     dataset_fp=args.dataset_fp)
