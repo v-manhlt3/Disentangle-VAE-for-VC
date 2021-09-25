@@ -10,4 +10,4 @@ python train.py --train true \
                 --style_cof=10 \
                 --mse_cof=10 \
                 --style_cof=0.1 \
-                --speaker_size=6 \
+                --speaker_size=4 \
