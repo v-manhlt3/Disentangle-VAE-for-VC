@@ -276,7 +276,7 @@ class DisentangledVAE(nn.Module):
 
         recons_x1_hat = recons_x1 + self.postnet(recons_x1)
         recons_x2_hat = recons_x2 + self.postnet(recons_x2)        
-        return recons_x1, recons_x2, recons_x1_hat, recons_x2_hat,content_mu1, content_logvar1, content_mu2, content_logvar2, style_mu1, style_logvar1
+        return recons_x1, recons_x2, recons_x1_hat, recons_x2_hat,q_z1_mu, q_z1_logvar, q_z2_mu, q_z2_logvar, z_style_mu, z_style_logvar
 
 
     def update_c(self):
