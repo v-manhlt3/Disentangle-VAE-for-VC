@@ -5,7 +5,7 @@ python train.py --train true \
                 --epochs=200000 \
                 --report-interval=500 \
                 --lr=1e-4 \
-                --samples_length=128 \
+                --samples_length=64 \
                 --batch-size=8 \
                 --style_cof=10 \
                 --mse_cof=10 \
