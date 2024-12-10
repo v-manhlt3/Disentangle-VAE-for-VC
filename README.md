@@ -11,7 +11,7 @@ We use VCTK-Corpus to train and estimate our proposed model, VCTK dataset can be
 # Pretrained model:
 
 pretrained model can be downloaded in this [link](https://drive.google.com/file/d/1TixHkqxPPRfxONraNJiTnZU9vcHwy9F4/view?usp=sharing)
-Wavenet Vocoder: [link](https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi_6i7zi4nQ/view?usp=sharing)
+Wavenet Vocoder: [link]([https://drive.google.com/file/d/1Zksy0ndlDezo9wclQNZYkGi_6i7zi4nQ/view?usp=sharing](https://www.dropbox.com/scl/fi/diz53bzh9zpfldmssdpef/20180510_mixture_lj_checkpoint_step000320000_ema.pth?rlkey=b7c17676ds0cpgm8ke75l7c80&e=1&dl=0)
 
 # Requirements:
 
